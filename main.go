@@ -24,7 +24,7 @@ func main() {
 	}
 	matches := headerRe.FindAllSubmatch(body, -1)
 	for _, m := range matches {
-		fmt.Println(string(m[1]))
+		fmt.Println("fetch card news:", string(m[1]))
 	}
 }
 

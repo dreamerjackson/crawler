@@ -5,17 +5,25 @@ import (
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/dreamerjackson/crawler/collect"
+	"github.com/dreamerjackson/crawler/proxy"
 	"time"
 )
 
 func main() {
-	url := "https://book.douban.com/subject/1007305/"
-	var f collect.Fetcher = collect.BrowserFetch{
-		Timeout: 300 * time.Millisecond,
+	proxyURLs := []string{"http://127.0.0.1:8888", "http://127.0.0.1:8888"}
+	p, err := proxy.RoundRobinProxySwitcher(proxyURLs...)
+	if err != nil {
+		fmt.Println("RoundRobinProxySwitcher failed")
 	}
+	url := "https://google.com"
+	var f collect.Fetcher = collect.BrowserFetch{
+		Timeout: 3000 * time.Millisecond,
+		Proxy:   p,
+	}
+
 	body, err := f.Get(url)
 	if err != nil {
-		fmt.Println("read content failed:%v", err)
+		fmt.Printf("read content failed:%v\n", err)
 		return
 	}
 	fmt.Println(string(body))

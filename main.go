@@ -43,12 +43,13 @@ func main() {
 		Proxy:   p,
 	}
 
-	s := engine.ScheduleEngine{
-		WorkCount: 5,
-		Logger:    logger,
-		Fetcher:   f,
-		Seeds:     seeds,
-	}
+	s := engine.NewSchedule(
+		engine.WithFetcher(f),
+		engine.WithLogger(logger),
+		engine.WithWorkCount(5),
+		engine.WithSeeds(seeds),
+	)
+
 	s.Run()
 
 }

@@ -5,17 +5,31 @@ import (
 	"go.uber.org/zap"
 )
 
-type ScheduleEngine struct {
+type Schedule struct {
 	requestCh chan *collect.Request
 	workerCh  chan *collect.Request
+	out       chan collect.ParseResult
+	options
+}
+
+type Config struct {
 	WorkCount int
 	Fetcher   collect.Fetcher
 	Logger    *zap.Logger
-	out       chan collect.ParseResult
 	Seeds     []*collect.Request
 }
 
-func (s *ScheduleEngine) Run() {
+func NewSchedule(opts ...Option) *Schedule {
+	options := defaultOptions
+	for _, opt := range opts {
+		opt(&options)
+	}
+	s := &Schedule{}
+	s.options = options
+	return s
+}
+
+func (s *Schedule) Run() {
 	requestCh := make(chan *collect.Request)
 	workerCh := make(chan *collect.Request)
 	out := make(chan collect.ParseResult)
@@ -29,7 +43,7 @@ func (s *ScheduleEngine) Run() {
 	s.HandleResult()
 }
 
-func (s *ScheduleEngine) Schedule() {
+func (s *Schedule) Schedule() {
 	var reqQueue = s.Seeds
 	go func() {
 		for {
@@ -51,13 +65,20 @@ func (s *ScheduleEngine) Schedule() {
 	}()
 }
 
-func (s *ScheduleEngine) CreateWork() {
+func (s *Schedule) CreateWork() {
 	for {
 		r := <-s.workerCh
 		body, err := s.Fetcher.Get(r)
+		if len(body) < 6000 {
+			s.Logger.Error("can't fetch ",
+				zap.Int("length", len(body)),
+				zap.String("url", r.Url),
+			)
+		}
 		if err != nil {
 			s.Logger.Error("can't fetch ",
 				zap.Error(err),
+				zap.String("url", r.Url),
 			)
 			continue
 		}
@@ -66,7 +87,7 @@ func (s *ScheduleEngine) CreateWork() {
 	}
 }
 
-func (s *ScheduleEngine) HandleResult() {
+func (s *Schedule) HandleResult() {
 	for {
 		select {
 		case result := <-s.out:
@@ -75,7 +96,7 @@ func (s *ScheduleEngine) HandleResult() {
 			}
 			for _, item := range result.Items {
 				// todo: store
-				s.Logger.Sugar().Info("get result", item)
+				s.Logger.Sugar().Info("get result: ", item)
 			}
 		}
 	}

@@ -11,7 +11,7 @@ type options struct {
 	WorkCount int
 	Fetcher   collect.Fetcher
 	Logger    *zap.Logger
-	Seeds     []*collect.Request
+	Seeds     []*collect.Task
 }
 
 var defaultOptions = options{
@@ -35,7 +35,7 @@ func WithWorkCount(workCount int) Option {
 	}
 }
 
-func WithSeeds(seed []*collect.Request) Option {
+func WithSeeds(seed []*collect.Task) Option {
 	return func(opts *options) {
 		opts.Seeds = seed
 	}

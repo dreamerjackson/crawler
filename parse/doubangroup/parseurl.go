@@ -17,9 +17,10 @@ func ParseURL(contents []byte, req *collect.Request) collect.ParseResult {
 		u := string(m[1])
 		result.Requesrts = append(
 			result.Requesrts, &collect.Request{
-				Task:  req.Task,
-				Url:   u,
-				Depth: req.Depth + 1,
+				Method: "GET",
+				Task:   req.Task,
+				Url:    u,
+				Depth:  req.Depth + 1,
 				ParseFunc: func(c []byte, request *collect.Request) collect.ParseResult {
 					return GetContent(c, u)
 				},

@@ -30,7 +30,9 @@ func main() {
 	seeds := make([]*collect.Task, 0, 1000)
 
 	seeds = append(seeds, &collect.Task{
-		Name:    "find_douban_sun_room",
+		Property: collect.Property{
+			Name: "js_find_douban_sun_room",
+		},
 		Fetcher: f,
 	})
 

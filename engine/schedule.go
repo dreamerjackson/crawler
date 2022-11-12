@@ -3,15 +3,107 @@ package engine
 import (
 	"github.com/dreamerjackson/crawler/collect"
 	"github.com/dreamerjackson/crawler/parse/doubangroup"
+	"github.com/robertkrimen/otto"
 	"go.uber.org/zap"
 	"sync"
 )
 
 func init() {
 	Store.Add(doubangroup.DoubangroupTask)
+	Store.AddJSTask(doubangroup.DoubangroupJSTask)
 }
 
 func (c *CrawlerStore) Add(task *collect.Task) {
+	c.hash[task.Name] = task
+	c.list = append(c.list, task)
+}
+
+type mystruct struct {
+	Name string
+	Age  int
+}
+
+// 用于动态规则添加请求。
+func AddJsReqs(jreqs []map[string]interface{}) []*collect.Request {
+	reqs := make([]*collect.Request, 0)
+
+	for _, jreq := range jreqs {
+		req := &collect.Request{}
+		u, ok := jreq["Url"].(string)
+		if !ok {
+			return nil
+		}
+		req.Url = u
+		req.RuleName, _ = jreq["RuleName"].(string)
+		req.Method, _ = jreq["Method"].(string)
+		req.Priority, _ = jreq["Priority"].(int64)
+		reqs = append(reqs, req)
+	}
+	return reqs
+}
+
+// 用于动态规则添加请求。
+func AddJsReq(jreq map[string]interface{}) []*collect.Request {
+	reqs := make([]*collect.Request, 0)
+	req := &collect.Request{}
+	u, ok := jreq["Url"].(string)
+	if !ok {
+		return nil
+	}
+	req.Url = u
+	req.RuleName, _ = jreq["RuleName"].(string)
+	req.Method, _ = jreq["Method"].(string)
+	req.Priority, _ = jreq["Priority"].(int64)
+	reqs = append(reqs, req)
+	return reqs
+}
+
+func (c *CrawlerStore) AddJSTask(m *collect.TaskModle) {
+	task := &collect.Task{
+		Property: m.Property,
+	}
+
+	task.Rule.Root = func() ([]*collect.Request, error) {
+		vm := otto.New()
+		vm.Set("AddJsReq", AddJsReqs)
+		v, err := vm.Eval(m.Root)
+		if err != nil {
+			return nil, err
+		}
+		e, err := v.Export()
+		if err != nil {
+			return nil, err
+		}
+		return e.([]*collect.Request), nil
+	}
+
+	for _, r := range m.Rules {
+		paesrFunc := func(parse string) func(ctx *collect.Context) (collect.ParseResult, error) {
+			return func(ctx *collect.Context) (collect.ParseResult, error) {
+				vm := otto.New()
+				vm.Set("ctx", ctx)
+				v, err := vm.Eval(parse)
+				if err != nil {
+					return collect.ParseResult{}, err
+				}
+				e, err := v.Export()
+				if err != nil {
+					return collect.ParseResult{}, err
+				}
+				if e == nil {
+					return collect.ParseResult{}, err
+				}
+				return e.(collect.ParseResult), err
+			}
+		}(r.ParseFunc)
+		if task.Rule.Trunk == nil {
+			task.Rule.Trunk = make(map[string]*collect.Rule, 0)
+		}
+		task.Rule.Trunk[r.Name] = &collect.Rule{
+			paesrFunc,
+		}
+	}
+
 	c.hash[task.Name] = task
 	c.list = append(c.list, task)
 }
@@ -132,7 +224,13 @@ func (e *Crawler) Schedule() {
 	for _, seed := range e.Seeds {
 		task := Store.hash[seed.Name]
 		task.Fetcher = seed.Fetcher
-		rootreqs := task.Rule.Root()
+		rootreqs, err := task.Rule.Root()
+		if err != nil {
+			e.Logger.Error("get root failed",
+				zap.Error(err),
+			)
+			continue
+		}
 		for _, req := range rootreqs {
 			req.Task = task
 		}
@@ -180,10 +278,18 @@ func (s *Crawler) CreateWork() {
 
 		rule := req.Task.Rule.Trunk[req.RuleName]
 
-		result := rule.ParseFunc(&collect.Context{
+		result, err := rule.ParseFunc(&collect.Context{
 			body,
 			req,
 		})
+
+		if err != nil {
+			s.Logger.Error("ParseFunc failed ",
+				zap.Error(err),
+				zap.String("url", req.Url),
+			)
+			continue
+		}
 
 		if len(result.Requesrts) > 0 {
 			go s.scheduler.Push(result.Requesrts...)

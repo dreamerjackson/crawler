@@ -18,11 +18,6 @@ func (c *CrawlerStore) Add(task *collect.Task) {
 	c.list = append(c.list, task)
 }
 
-type mystruct struct {
-	Name string
-	Age  int
-}
-
 // 用于动态规则添加请求。
 func AddJsReqs(jreqs []map[string]interface{}) []*collect.Request {
 	reqs := make([]*collect.Request, 0)
@@ -108,7 +103,7 @@ func (c *CrawlerStore) AddJSTask(m *collect.TaskModle) {
 	c.list = append(c.list, task)
 }
 
-// 全局蜘蛛种类实例
+// 全局爬虫任务实例
 var Store = &CrawlerStore{
 	list: []*collect.Task{},
 	hash: map[string]*collect.Task{},
@@ -181,11 +176,6 @@ func (s *Schedule) Push(reqs ...*collect.Request) {
 }
 
 func (s *Schedule) Pull() *collect.Request {
-	r := <-s.workerCh
-	return r
-}
-
-func (s *Schedule) Output() *collect.Request {
 	r := <-s.workerCh
 	return r
 }

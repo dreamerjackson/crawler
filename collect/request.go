@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"github.com/dreamerjackson/crawler/collector"
+	"go.uber.org/zap"
 	"regexp"
 	"sync"
 	"time"
@@ -25,8 +26,9 @@ type Task struct {
 	Visited     map[string]bool
 	VisitedLock sync.Mutex
 	Fetcher     Fetcher
-	Store       collector.Store
+	Storage     collector.Storage
 	Rule        RuleTree
+	Logger      *zap.Logger
 }
 
 type Context struct {
@@ -38,9 +40,10 @@ func (c *Context) GetRule(ruleName string) *Rule {
 	return c.Req.Task.Rule.Trunk[ruleName]
 }
 
-func (c *Context) Output(data interface{}) *collector.OutputData {
-	res := &collector.OutputData{}
+func (c *Context) Output(data interface{}) *collector.DataCell {
+	res := &collector.DataCell{}
 	res.Data = make(map[string]interface{})
+	res.Data["Task"] = c.Req.Task.Name
 	res.Data["Rule"] = c.Req.RuleName
 	res.Data["Data"] = data
 	res.Data["Url"] = c.Req.Url

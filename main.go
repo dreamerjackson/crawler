@@ -2,6 +2,8 @@ package main
 
 import (
 	"github.com/dreamerjackson/crawler/collect"
+	"github.com/dreamerjackson/crawler/collector"
+	"github.com/dreamerjackson/crawler/collector/sqlstorage"
 	"github.com/dreamerjackson/crawler/engine"
 	"github.com/dreamerjackson/crawler/log"
 	"github.com/dreamerjackson/crawler/proxy"
@@ -20,6 +22,7 @@ func main() {
 	p, err := proxy.RoundRobinProxySwitcher(proxyURLs...)
 	if err != nil {
 		logger.Error("RoundRobinProxySwitcher failed")
+		return
 	}
 
 	var f collect.Fetcher = &collect.BrowserFetch{
@@ -27,13 +30,25 @@ func main() {
 		Logger:  logger,
 		Proxy:   p,
 	}
-	seeds := make([]*collect.Task, 0, 1000)
 
+	var storage collector.Storage
+	storage, err = sqlstorage.New(
+		sqlstorage.WithSqlUrl("root:123456@tcp(127.0.0.1:3326)/crawler?charset=utf8"),
+		sqlstorage.WithLogger(logger.Named("sqlDB")),
+		sqlstorage.WithBatchCount(2),
+	)
+	if err != nil {
+		logger.Error("create sqlstorage failed")
+		return
+	}
+
+	seeds := make([]*collect.Task, 0, 1000)
 	seeds = append(seeds, &collect.Task{
 		Property: collect.Property{
 			Name: "douban_book_list",
 		},
 		Fetcher: f,
+		Storage: storage,
 	})
 
 	s := engine.NewEngine(

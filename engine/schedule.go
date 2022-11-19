@@ -2,6 +2,7 @@ package engine
 
 import (
 	"github.com/dreamerjackson/crawler/collect"
+	"github.com/dreamerjackson/crawler/collector"
 	"github.com/dreamerjackson/crawler/parse/doubanbook"
 	"github.com/dreamerjackson/crawler/parse/doubangroup"
 	"github.com/dreamerjackson/crawler/parse/doubangroupjs"
@@ -17,7 +18,7 @@ func init() {
 }
 
 func (c *CrawlerStore) Add(task *collect.Task) {
-	c.hash[task.Name] = task
+	c.Hash[task.Name] = task
 	c.list = append(c.list, task)
 }
 
@@ -102,19 +103,23 @@ func (c *CrawlerStore) AddJSTask(m *collect.TaskModle) {
 		}
 	}
 
-	c.hash[task.Name] = task
+	c.Hash[task.Name] = task
 	c.list = append(c.list, task)
 }
 
 // 全局爬虫任务实例
 var Store = &CrawlerStore{
 	list: []*collect.Task{},
-	hash: map[string]*collect.Task{},
+	Hash: map[string]*collect.Task{},
+}
+
+func GetFields(taskName string, ruleName string) []string {
+	return Store.Hash[taskName].Rule.Trunk[ruleName].ItemFields
 }
 
 type CrawlerStore struct {
 	list []*collect.Task
-	hash map[string]*collect.Task
+	Hash map[string]*collect.Task
 }
 
 type Crawler struct {
@@ -215,8 +220,10 @@ func (s *Schedule) Schedule() {
 func (e *Crawler) Schedule() {
 	var reqs []*collect.Request
 	for _, seed := range e.Seeds {
-		task := Store.hash[seed.Name]
+		task := Store.Hash[seed.Name]
 		task.Fetcher = seed.Fetcher
+		task.Storage = seed.Storage
+		task.Logger = e.Logger
 		rootreqs, err := task.Rule.Root()
 		if err != nil {
 			e.Logger.Error("get root failed",
@@ -297,7 +304,12 @@ func (s *Crawler) HandleResult() {
 		select {
 		case result := <-s.out:
 			for _, item := range result.Items {
-				// todo: store
+				switch d := item.(type) {
+				case *collector.DataCell:
+					name := d.GetTaskName()
+					task := Store.Hash[name]
+					task.Storage.Save(d)
+				}
 				s.Logger.Sugar().Info("get result: ", item)
 			}
 		}

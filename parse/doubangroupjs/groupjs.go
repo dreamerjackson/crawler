@@ -1,4 +1,4 @@
-package doubangroup
+package doubangroupjs
 
 import (
 	"github.com/dreamerjackson/crawler/collect"

@@ -31,7 +31,7 @@ func main() {
 
 	seeds = append(seeds, &collect.Task{
 		Property: collect.Property{
-			Name: "js_find_douban_sun_room",
+			Name: "douban_book_list",
 		},
 		Fetcher: f,
 	})

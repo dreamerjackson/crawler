@@ -1,4 +1,4 @@
-package collector
+package storage
 
 type DataCell struct {
 	Data map[string]interface{}

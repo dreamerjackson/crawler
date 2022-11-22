@@ -2,26 +2,26 @@ package sqlstorage
 
 import (
 	"encoding/json"
-	"github.com/dreamerjackson/crawler/collector"
 	"github.com/dreamerjackson/crawler/engine"
 	"github.com/dreamerjackson/crawler/sqldb"
+	"github.com/dreamerjackson/crawler/storage"
 	"go.uber.org/zap"
 )
 
-type SqlStore struct {
-	dataDocker  []*collector.DataCell //分批输出结果缓存
-	columnNames []sqldb.Field         // 标题字段
+type SqlStorage struct {
+	dataDocker  []*storage.DataCell //分批输出结果缓存
+	columnNames []sqldb.Field       // 标题字段
 	db          sqldb.DBer
 	Table       map[string]struct{}
 	options
 }
 
-func New(opts ...Option) (*SqlStore, error) {
+func New(opts ...Option) (*SqlStorage, error) {
 	options := defaultOptions
 	for _, opt := range opts {
 		opt(&options)
 	}
-	s := &SqlStore{}
+	s := &SqlStorage{}
 	s.options = options
 	s.Table = make(map[string]struct{})
 	var err error
@@ -36,7 +36,7 @@ func New(opts ...Option) (*SqlStore, error) {
 	return s, nil
 }
 
-func (s *SqlStore) Save(dataCells ...*collector.DataCell) error {
+func (s *SqlStorage) Save(dataCells ...*storage.DataCell) error {
 	for _, cell := range dataCells {
 		name := cell.GetTableName()
 		if _, ok := s.Table[name]; !ok {
@@ -54,14 +54,16 @@ func (s *SqlStore) Save(dataCells ...*collector.DataCell) error {
 			s.Table[name] = struct{}{}
 		}
 		if len(s.dataDocker) >= s.BatchCount {
-			s.Flush()
+			if err := s.Flush(); err != nil {
+				s.logger.Error("insert data failed", zap.Error(err))
+			}
 		}
 		s.dataDocker = append(s.dataDocker, cell)
 	}
 	return nil
 }
 
-func getFields(cell *collector.DataCell) []sqldb.Field {
+func getFields(cell *storage.DataCell) []sqldb.Field {
 	taskName := cell.Data["Task"].(string)
 	ruleName := cell.Data["Rule"].(string)
 	fields := engine.GetFields(taskName, ruleName)
@@ -80,10 +82,13 @@ func getFields(cell *collector.DataCell) []sqldb.Field {
 	return columnNames
 }
 
-func (s *SqlStore) Flush() error {
+func (s *SqlStorage) Flush() (err error) {
 	if len(s.dataDocker) == 0 {
 		return nil
 	}
+	defer func() {
+		s.dataDocker = nil
+	}()
 	args := make([]interface{}, 0)
 	for _, datacell := range s.dataDocker {
 		ruleName := datacell.Data["Rule"].(string)

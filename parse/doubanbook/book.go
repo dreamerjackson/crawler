@@ -1,10 +1,11 @@
 package doubanbook
 
 import (
-	"github.com/dreamerjackson/crawler/collect"
-	"go.uber.org/zap"
 	"regexp"
 	"strconv"
+
+	"github.com/dreamerjackson/crawler/collect"
+	"go.uber.org/zap"
 )
 
 var DoubanBookTask = &collect.Task{
@@ -17,19 +18,20 @@ var DoubanBookTask = &collect.Task{
 	Rule: collect.RuleTree{
 		Root: func() ([]*collect.Request, error) {
 			roots := []*collect.Request{
-				&collect.Request{
+				{
 					Priority: 1,
-					Url:      "https://book.douban.com",
+					URL:      "https://book.douban.com",
 					Method:   "GET",
 					RuleName: "数据tag",
 				},
 			}
+
 			return roots, nil
 		},
 		Trunk: map[string]*collect.Rule{
-			"数据tag": &collect.Rule{ParseFunc: ParseTag},
-			"书籍列表":  &collect.Rule{ParseFunc: ParseBookList},
-			"书籍简介": &collect.Rule{
+			"数据tag": {ParseFunc: ParseTag},
+			"书籍列表":  {ParseFunc: ParseBookList},
+			"书籍简介": {
 				ItemFields: []string{
 					"书名",
 					"作者",
@@ -58,7 +60,7 @@ func ParseTag(ctx *collect.Context) (collect.ParseResult, error) {
 			result.Requesrts, &collect.Request{
 				Method:   "GET",
 				Task:     ctx.Req.Task,
-				Url:      "https://book.douban.com" + string(m[1]),
+				URL:      "https://book.douban.com" + string(m[1]),
 				Depth:    ctx.Req.Depth + 1,
 				RuleName: "书籍列表",
 			})
@@ -66,7 +68,7 @@ func ParseTag(ctx *collect.Context) (collect.ParseResult, error) {
 
 	zap.S().Debugln("parse book tag,count:", len(result.Requesrts))
 	// 在添加limit之前，临时减少抓取数量,防止被服务器封禁
-	//result.Requesrts = result.Requesrts[:1]
+	// result.Requesrts = result.Requesrts[:1]
 	return result, nil
 }
 
@@ -76,19 +78,25 @@ func ParseBookList(ctx *collect.Context) (collect.ParseResult, error) {
 	re := regexp.MustCompile(BooklistRe)
 	matches := re.FindAllSubmatch(ctx.Body, -1)
 	result := collect.ParseResult{}
+
 	for _, m := range matches {
 		req := &collect.Request{
 			Priority: 100,
 			Method:   "GET",
 			Task:     ctx.Req.Task,
-			Url:      string(m[1]),
+			URL:      string(m[1]),
 			Depth:    ctx.Req.Depth + 1,
 			RuleName: "书籍简介",
 		}
 		req.TmpData = &collect.Temp{}
-		req.TmpData.Set("book_name", string(m[2]))
+
+		if err := req.TmpData.Set("book_name", string(m[2])); err != nil {
+			zap.L().Error("Set TmpData failed", zap.Error(err))
+		}
+
 		result.Requesrts = append(result.Requesrts, req)
 	}
+
 	zap.S().Debugln("parse book list,count:", len(result.Requesrts))
 
 	return result, nil
@@ -119,18 +127,18 @@ func ParseBookDetail(ctx *collect.Context) (collect.ParseResult, error) {
 	result := collect.ParseResult{
 		Items: []interface{}{data},
 	}
+
 	zap.S().Debugln("parse book detail", data)
 
 	return result, nil
 }
 
 func ExtraString(contents []byte, re *regexp.Regexp) string {
-
 	match := re.FindSubmatch(contents)
 
 	if len(match) >= 2 {
 		return string(match[1])
-	} else {
-		return ""
 	}
+
+	return ""
 }

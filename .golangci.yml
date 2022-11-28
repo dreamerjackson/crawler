@@ -1,0 +1,58 @@
+run:
+    tests: false
+    skip-dirs:
+        - vendor
+
+linters-settings:
+    funlen:
+        # Checks the number of lines in a function.
+        # If lower than 0, disable the check.
+        # Default: 60
+        lines: 120
+        # Checks the number of statements in a function.
+        # If lower than 0, disable the check.
+        # Default: 40
+        statements: -1
+
+# list all linters by run `golangci-lint help linters`
+linters:
+    enable-all: true
+    disable:
+        # gochecknoglobals: Checks that no globals are present in Go code
+        - gochecknoglobals
+        # gochecknoinits: Checks that no init functions are present in Go code
+        - gochecknoinits
+        # Checks that errors returned from external packages are wrapped
+        - wrapcheck
+        # checks that the length of a variable's name matches its scope
+        - varnamelen
+        # Checks the struct tags.
+        - tagliatelle
+        # An analyzer to detect magic numbers.
+        - gomnd
+        # Accept Interfaces, Return Concrete Types
+        - ireturn
+        # The owner seems to have abandoned the linter. Replaced by exhaustruct.
+        - exhaustivestruct
+        # Golang linter to check the errors handling expressions
+        - goerr113
+        # finds forced type assertions
+        - forcetypeassert
+        # Checks if all structure fields are initialized
+        - exhaustruct
+        # Reports long lines
+        - lll
+        # Inspects source code for security problems
+        - gosec
+        # Tool for detection of FIXME, TODO and other comment keywords
+        - godox
+        # Check if comments end in a period
+        - godot
+        # Finds slice declarations that could potentially be pre-allocated
+        - prealloc
+        # Gci controls golang package import order and makes it always deterministic.
+        - gci
+        # Gofumpt checks whether code was gofumpt-ed.
+        - gofumpt
+        # Provides diagnostics that check for bugs, performance and style issues.
+        - gocritic

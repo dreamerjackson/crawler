@@ -5,18 +5,19 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
-	"github.com/dreamerjackson/crawler/limiter"
-	"github.com/dreamerjackson/crawler/storage"
-	"go.uber.org/zap"
 	"math/rand"
 	"regexp"
 	"sync"
 	"time"
+
+	"github.com/dreamerjackson/crawler/limiter"
+	"github.com/dreamerjackson/crawler/storage"
+	"go.uber.org/zap"
 )
 
 type Property struct {
 	Name     string `json:"name"` // 任务名称，应保证唯一性
-	Url      string `json:"url"`
+	URL      string `json:"url"`
 	Cookie   string `json:"cookie"`
 	WaitTime int64  `json:"wait_time"` // 随机休眠时间，秒
 	Reload   bool   `json:"reload"`    // 网站是否可以重复爬取
@@ -50,8 +51,9 @@ func (c *Context) Output(data interface{}) *storage.DataCell {
 	res.Data["Task"] = c.Req.Task.Name
 	res.Data["Rule"] = c.Req.RuleName
 	res.Data["Data"] = data
-	res.Data["Url"] = c.Req.Url
+	res.Data["URL"] = c.Req.URL
 	res.Data["Time"] = time.Now().Format("2006-01-02 15:04:05")
+
 	return res
 }
 
@@ -63,37 +65,39 @@ func (c *Context) ParseJSReg(name string, reg string) ParseResult {
 
 	for _, m := range matches {
 		u := string(m[1])
+
 		result.Requesrts = append(
 			result.Requesrts, &Request{
 				Method:   "GET",
 				Task:     c.Req.Task,
-				Url:      u,
+				URL:      u,
 				Depth:    c.Req.Depth + 1,
 				RuleName: name,
 			})
 	}
+
 	return result
 }
 
 func (c *Context) OutputJS(reg string) ParseResult {
 	re := regexp.MustCompile(reg)
-	ok := re.Match(c.Body)
-	if !ok {
+	if ok := re.Match(c.Body); !ok {
 		return ParseResult{
 			Items: []interface{}{},
 		}
 	}
+
 	result := ParseResult{
-		Items: []interface{}{c.Req.Url},
+		Items: []interface{}{c.Req.URL},
 	}
+
 	return result
 }
 
 // 单个请求
 type Request struct {
-	unique   string
 	Task     *Task
-	Url      string
+	URL      string
 	Method   string
 	Depth    int64
 	Priority int64
@@ -108,6 +112,7 @@ func (r *Request) Fetch() ([]byte, error) {
 	// 随机休眠，模拟人类行为
 	sleeptime := rand.Int63n(r.Task.WaitTime * 1000)
 	time.Sleep(time.Duration(sleeptime) * time.Millisecond)
+
 	return r.Task.Fetcher.Get(r)
 }
 
@@ -118,13 +123,15 @@ type ParseResult struct {
 
 func (r *Request) Check() error {
 	if r.Depth > r.Task.MaxDepth {
-		return errors.New("Max depth limit reached")
+		return errors.New("max depth limit reached")
 	}
+
 	return nil
 }
 
 // 请求的唯一识别码
 func (r *Request) Unique() string {
-	block := md5.Sum([]byte(r.Url + r.Method))
+	block := md5.Sum([]byte(r.URL + r.Method))
+
 	return hex.EncodeToString(block[:])
 }

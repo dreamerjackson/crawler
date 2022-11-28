@@ -1,15 +1,16 @@
 package log_test
 
 import (
-	"github.com/dreamerjackson/crawler/log"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap/zapcore"
 	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dreamerjackson/crawler/log"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zapcore"
 )
 
 func TestFile(t *testing.T) {

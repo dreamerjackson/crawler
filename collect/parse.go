@@ -1,6 +1,6 @@
 package collect
 
-//采集规则树
+// 采集规则树
 type RuleTree struct {
 	Root  func() ([]*Request, error) // 根节点(执行入口)
 	Trunk map[string]*Rule           // 规则哈希表
@@ -9,5 +9,6 @@ type RuleTree struct {
 // 采集规则节点
 type Rule struct {
 	ItemFields []string
-	ParseFunc  func(*Context) (ParseResult, error) // 内容解析函数
+	// todo: return *ParseResult
+	ParseFunc func(*Context) (ParseResult, error) // 内容解析函数
 }

@@ -1,10 +1,11 @@
 package log
 
 import (
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"io"
 	"os"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 type Plugin = zapcore.Core
@@ -32,5 +33,6 @@ func NewFilePlugin(
 	filePath string, enabler zapcore.LevelEnabler) (Plugin, io.Closer) {
 	var writer = DefaultLumberjackLogger()
 	writer.Filename = filePath
+
 	return NewPlugin(zapcore.AddSync(writer), enabler), writer
 }

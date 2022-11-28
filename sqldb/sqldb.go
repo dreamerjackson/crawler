@@ -3,9 +3,9 @@ package sqldb
 import (
 	"database/sql"
 	"errors"
-	_ "github.com/go-sql-driver/mysql"
-	"go.uber.org/zap"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
 type DBer interface {
@@ -35,48 +35,56 @@ func New(opts ...Option) (*Sqldb, error) {
 	for _, opt := range opts {
 		opt(&options)
 	}
+
 	d := &Sqldb{}
 	d.options = options
+
 	if err := d.OpenDB(); err != nil {
 		return nil, err
 	}
+
 	return d, nil
 }
 
 func (d *Sqldb) OpenDB() error {
-	db, err := sql.Open("mysql", d.sqlUrl)
+	db, err := sql.Open("mysql", d.sqlURL)
 	if err != nil {
 		return err
 	}
+
 	db.SetMaxOpenConns(2048)
 	db.SetMaxIdleConns(2048)
+
 	if err = db.Ping(); err != nil {
 		return err
 	}
+
 	d.db = db
+
 	return nil
 }
 
-//func (db *Sqldb) Exec(sql string) error {
-//	return db.Exec(sql)
-//}
-
 func (d *Sqldb) CreateTable(t TableData) error {
 	if len(t.ColumnNames) == 0 {
-		return errors.New("Column can not be empty")
+		return errors.New("column can not be empty")
 	}
+
 	sql := `CREATE TABLE IF NOT EXISTS ` + t.TableName + " ("
+
 	if t.AutoKey {
 		sql += `id INT(12) NOT NULL PRIMARY KEY AUTO_INCREMENT,`
 	}
+
 	for _, t := range t.ColumnNames {
 		sql += t.Title + ` ` + t.Type + `,`
 	}
+
 	sql = sql[:len(sql)-1] + `) ENGINE=MyISAM DEFAULT CHARSET=utf8;`
 
 	d.logger.Debug("crate table", zap.String("sql", sql))
 
 	_, err := d.db.Exec(sql)
+
 	return err
 }
 
@@ -84,6 +92,7 @@ func (d *Sqldb) Insert(t TableData) error {
 	if len(t.ColumnNames) == 0 {
 		return errors.New("empty column")
 	}
+
 	sql := `INSERT INTO ` + t.TableName + `(`
 
 	for _, v := range t.ColumnNames {
@@ -96,5 +105,6 @@ func (d *Sqldb) Insert(t TableData) error {
 	sql += strings.Repeat(blank, t.DataCount)[1:] + `;`
 	d.logger.Debug("insert table", zap.String("sql", sql))
 	_, err := d.db.Exec(sql, t.Args...)
+
 	return err
 }

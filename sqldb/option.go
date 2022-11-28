@@ -6,7 +6,7 @@ import (
 
 type options struct {
 	logger *zap.Logger
-	sqlUrl string
+	sqlURL string
 }
 
 var defaultOptions = options{
@@ -21,8 +21,8 @@ func WithLogger(logger *zap.Logger) Option {
 	}
 }
 
-func WithConnUrl(sqlUrl string) Option {
+func WithConnURL(sqlURL string) Option {
 	return func(opts *options) {
-		opts.sqlUrl = sqlUrl
+		opts.sqlURL = sqlURL
 	}
 }

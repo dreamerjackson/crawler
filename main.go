@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"github.com/dreamerjackson/crawler/limiter"
+	"github.com/dreamerjackson/crawler/spider"
 	"go-micro.dev/v4/config"
 	"go-micro.dev/v4/config/reader"
 	"go-micro.dev/v4/config/reader/json"
 	"go-micro.dev/v4/config/source"
 	"go-micro.dev/v4/config/source/file"
+	"golang.org/x/time/rate"
 	"net/http"
 	"time"
 
@@ -15,11 +18,9 @@ import (
 
 	"github.com/dreamerjackson/crawler/collect"
 	"github.com/dreamerjackson/crawler/engine"
-	"github.com/dreamerjackson/crawler/limiter"
 	"github.com/dreamerjackson/crawler/log"
 	pb "github.com/dreamerjackson/crawler/proto/greeter"
 	"github.com/dreamerjackson/crawler/proxy"
-	"github.com/dreamerjackson/crawler/storage"
 	"github.com/dreamerjackson/crawler/storage/sqlstorage"
 	"github.com/go-micro/plugins/v4/config/encoder/toml"
 	etcdReg "github.com/go-micro/plugins/v4/registry/etcd"
@@ -31,17 +32,15 @@ import (
 	"go-micro.dev/v4/server"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 )
 
 func main() {
-
 	var (
 		err     error
 		logger  *zap.Logger
 		p       proxy.Func
-		storage storage.Storage
+		storage spider.Storage
 	)
 
 	// load config
@@ -53,14 +52,14 @@ func main() {
 	))
 
 	if err != nil {
-		return
+		panic(err)
 	}
 
 	// log
 	logText := cfg.Get("logLevel").String("INFO")
 	logLevel, err := zapcore.ParseLevel(logText)
 	if err != nil {
-		return
+		panic(err)
 	}
 	plugin := log.NewStdoutPlugin(logLevel)
 	logger = log.NewLogger(plugin)
@@ -76,7 +75,7 @@ func main() {
 	if p, err = proxy.RoundRobinProxySwitcher(proxyURLs...); err != nil {
 		logger.Error("RoundRobinProxySwitcher failed", zap.Error(err))
 	}
-	var f collect.Fetcher = &collect.BrowserFetch{
+	var f spider.Fetcher = &collect.BrowserFetch{
 		Timeout: time.Duration(timeout) * time.Millisecond,
 		Logger:  logger,
 		Proxy:   p,
@@ -93,23 +92,15 @@ func main() {
 		return
 	}
 
-	// speed limiter
-	secondLimit := rate.NewLimiter(limiter.Per(1, 2*time.Second), 1)
-	minuteLimit := rate.NewLimiter(limiter.Per(20, 1*time.Minute), 20)
-	multiLimiter := limiter.Multi(secondLimit, minuteLimit)
-
 	// init tasks
-	seeds := make([]*collect.Task, 0, 1000)
-	seeds = append(seeds, &collect.Task{
-		Property: collect.Property{
-			Name: "douban_book_list",
-		},
-		Fetcher: f,
-		Storage: storage,
-		Limit:   multiLimiter,
-	})
+	var tcfg []spider.TaskConfig
+	if err := cfg.Get("Tasks").Scan(&tcfg); err != nil {
+		logger.Error("init seed tasks", zap.Error(err))
+	}
 
-	_ = engine.NewEngine(
+	seeds := ParseTaskConfig(logger, f, storage, tcfg)
+
+	s := engine.NewEngine(
 		engine.WithFetcher(f),
 		engine.WithLogger(logger),
 		engine.WithWorkCount(5),
@@ -118,7 +109,7 @@ func main() {
 	)
 
 	// worker start
-	//go s.Run()
+	go s.Run()
 
 	var sconfig ServerConfig
 	if err := cfg.Get("GRPCServer").Scan(&sconfig); err != nil {
@@ -219,4 +210,43 @@ func logWrapper(log *zap.Logger) server.HandlerWrapper {
 			return err
 		}
 	}
+}
+
+func ParseTaskConfig(logger *zap.Logger, f spider.Fetcher, s spider.Storage, cfgs []spider.TaskConfig) []*spider.Task {
+	tasks := make([]*spider.Task, 0, 1000)
+	for _, cfg := range cfgs {
+		t := spider.NewTask(
+			spider.WithName(cfg.Name),
+			spider.WithReload(cfg.Reload),
+			spider.WithCookie(cfg.Cookie),
+			spider.WithLogger(logger),
+			spider.WithStorage(s),
+		)
+
+		if cfg.WaitTime > 0 {
+			t.WaitTime = cfg.WaitTime
+		}
+
+		if cfg.MaxDepth > 0 {
+			t.MaxDepth = cfg.MaxDepth
+		}
+
+		var limits []limiter.RateLimiter
+		if len(cfg.Limits) > 0 {
+			for _, lcfg := range cfg.Limits {
+				// speed limiter
+				l := rate.NewLimiter(limiter.Per(lcfg.EventCount, time.Duration(lcfg.EventDur)*time.Second), 1)
+				limits = append(limits, l)
+			}
+			multiLimiter := limiter.Multi(limits...)
+			t.Limit = multiLimiter
+		}
+
+		switch cfg.Fetcher {
+		case "browser":
+			t.Fetcher = f
+		}
+		tasks = append(tasks, t)
+	}
+	return tasks
 }

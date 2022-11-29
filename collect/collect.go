@@ -3,6 +3,7 @@ package collect
 import (
 	"bufio"
 	"fmt"
+	"github.com/dreamerjackson/crawler/spider"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -16,13 +17,9 @@ import (
 	"golang.org/x/text/transform"
 )
 
-type Fetcher interface {
-	Get(url *Request) ([]byte, error)
-}
-
 type BaseFetch struct{}
 
-func (BaseFetch) Get(req *Request) ([]byte, error) {
+func (BaseFetch) Get(req *spider.Request) ([]byte, error) {
 	resp, err := http.Get(req.URL)
 
 	if err != nil {
@@ -49,7 +46,7 @@ type BrowserFetch struct {
 }
 
 // 模拟浏览器访问
-func (b BrowserFetch) Get(request *Request) ([]byte, error) {
+func (b BrowserFetch) Get(request *spider.Request) ([]byte, error) {
 	client := &http.Client{
 		Timeout: b.Timeout,
 	}

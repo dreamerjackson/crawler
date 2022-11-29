@@ -1,4 +1,4 @@
-package collect
+package spider
 
 type Temp struct {
 	data map[string]interface{}

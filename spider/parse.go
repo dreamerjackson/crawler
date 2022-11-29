@@ -1,4 +1,4 @@
-package collect
+package spider
 
 // 采集规则树
 type RuleTree struct {

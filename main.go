@@ -2,6 +2,11 @@ package main
 
 import (
 	"context"
+	"go-micro.dev/v4/config"
+	"go-micro.dev/v4/config/reader"
+	"go-micro.dev/v4/config/reader/json"
+	"go-micro.dev/v4/config/source"
+	"go-micro.dev/v4/config/source/file"
 	"net/http"
 	"time"
 
@@ -16,6 +21,7 @@ import (
 	"github.com/dreamerjackson/crawler/proxy"
 	"github.com/dreamerjackson/crawler/storage"
 	"github.com/dreamerjackson/crawler/storage/sqlstorage"
+	"github.com/go-micro/plugins/v4/config/encoder/toml"
 	etcdReg "github.com/go-micro/plugins/v4/registry/etcd"
 	gs "github.com/go-micro/plugins/v4/server/grpc"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -30,45 +36,60 @@ import (
 )
 
 func main() {
+
+	var (
+		err     error
+		logger  *zap.Logger
+		p       proxy.Func
+		storage storage.Storage
+	)
+
+	// load config
+	enc := toml.NewEncoder()
+	cfg, err := config.NewConfig(config.WithReader(json.NewReader(reader.WithEncoder(enc))))
+	err = cfg.Load(file.NewSource(
+		file.WithPath("/Users/jackson/career/crawler/config.toml"),
+		source.WithEncoder(enc),
+	))
+
+	if err != nil {
+		return
+	}
+
 	// log
-	plugin := log.NewStdoutPlugin(zapcore.DebugLevel)
-	logger := log.NewLogger(plugin)
+	logText := cfg.Get("logLevel").String("INFO")
+	logLevel, err := zapcore.ParseLevel(logText)
+	if err != nil {
+		return
+	}
+	plugin := log.NewStdoutPlugin(logLevel)
+	logger = log.NewLogger(plugin)
 	logger.Info("log init end")
 
 	// set zap global logger
 	zap.ReplaceGlobals(logger)
 
-	// proxy
-
-	var err error
-
-	var p proxy.Func
-
-	proxyURLs := []string{"http://127.0.0.1:8888", "http://127.0.0.1:8888"}
-
-	if p, err = proxy.RoundRobinProxySwitcher(proxyURLs...); err != nil {
-		logger.Error("RoundRobinProxySwitcher failed")
-
-		return
-	}
-
 	// fetcher
+	proxyURLs := cfg.Get("fetcher", "proxy").StringSlice([]string{})
+	timeout := cfg.Get("fetcher", "timeout").Int(5000)
+	logger.Sugar().Info("proxy list: ", proxyURLs, " timeout: ", timeout)
+	if p, err = proxy.RoundRobinProxySwitcher(proxyURLs...); err != nil {
+		logger.Error("RoundRobinProxySwitcher failed", zap.Error(err))
+	}
 	var f collect.Fetcher = &collect.BrowserFetch{
-		Timeout: 3000 * time.Millisecond,
+		Timeout: time.Duration(timeout) * time.Millisecond,
 		Logger:  logger,
 		Proxy:   p,
 	}
 
 	// storage
-	var storage storage.Storage
-
+	sqlURL := cfg.Get("storage", "sqlURL").String("")
 	if storage, err = sqlstorage.New(
-		sqlstorage.WithSQLURL("root:123456@tcp(127.0.0.1:3326)/crawler?charset=utf8"),
+		sqlstorage.WithSQLURL(sqlURL),
 		sqlstorage.WithLogger(logger.Named("sqlDB")),
 		sqlstorage.WithBatchCount(2),
 	); err != nil {
-		logger.Error("create sqlstorage failed")
-
+		logger.Error("create sqlstorage failed", zap.Error(err))
 		return
 	}
 
@@ -88,7 +109,7 @@ func main() {
 		Limit:   multiLimiter,
 	})
 
-	s := engine.NewEngine(
+	_ = engine.NewEngine(
 		engine.WithFetcher(f),
 		engine.WithLogger(logger),
 		engine.WithWorkCount(5),
@@ -97,31 +118,48 @@ func main() {
 	)
 
 	// worker start
-	go s.Run()
+	//go s.Run()
+
+	var sconfig ServerConfig
+	if err := cfg.Get("GRPCServer").Scan(&sconfig); err != nil {
+		logger.Error("get GRPC Server config failed", zap.Error(err))
+	}
+	logger.Sugar().Debugf("grpc server config,%+v", sconfig)
 
 	// start http proxy to GRPC
-	go RunHTTPServer()
+	go RunHTTPServer(sconfig)
 
 	// start grpc server
-	RunGRPCServer(logger)
+	RunGRPCServer(logger, sconfig)
 }
 
-func RunGRPCServer(logger *zap.Logger) {
-	reg := etcdReg.NewRegistry(registry.Addrs(":2379"))
+type ServerConfig struct {
+	GRPCListenAddress string
+	HTTPListenAddress string
+	ID                string
+	RegistryAddress   string
+	RegisterTTL       int
+	RegisterInterval  int
+	Name              string
+	ClientTimeOut     int
+}
+
+func RunGRPCServer(logger *zap.Logger, cfg ServerConfig) {
+	reg := etcdReg.NewRegistry(registry.Addrs(cfg.RegistryAddress))
 	service := micro.NewService(
 		micro.Server(gs.NewServer(
-			server.Id("1"),
+			server.Id(cfg.ID),
 		)),
-		micro.Address(":9090"),
+		micro.Address(cfg.GRPCListenAddress),
 		micro.Registry(reg),
-		micro.RegisterTTL(60*time.Second),
-		micro.RegisterInterval(15*time.Second),
+		micro.RegisterTTL(time.Duration(cfg.RegisterTTL)*time.Second),
+		micro.RegisterInterval(time.Duration(cfg.RegisterInterval)*time.Second),
 		micro.WrapHandler(logWrapper(logger)),
-		micro.Name("go.micro.server.worker"),
+		micro.Name(cfg.Name),
 	)
 
 	// 设置micro 客户端默认超时时间为10秒钟
-	if err := service.Client().Init(client.RequestTimeout(10 * time.Second)); err != nil {
+	if err := service.Client().Init(client.RequestTimeout(time.Duration(cfg.ClientTimeOut) * time.Second)); err != nil {
 		logger.Sugar().Error("micro client init error. ", zap.String("error:", err.Error()))
 
 		return
@@ -146,7 +184,7 @@ func (g *Greeter) Hello(ctx context.Context, req *pb.Request, rsp *pb.Response) 
 	return nil
 }
 
-func RunHTTPServer() {
+func RunHTTPServer(cfg ServerConfig) {
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -157,11 +195,11 @@ func RunHTTPServer() {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
 
-	if err := pb.RegisterGreeterGwFromEndpoint(ctx, mux, "localhost:9090", opts); err != nil {
+	if err := pb.RegisterGreeterGwFromEndpoint(ctx, mux, cfg.GRPCListenAddress, opts); err != nil {
 		zap.L().Fatal("Register backend grpc server endpoint failed")
 	}
-
-	if err := http.ListenAndServe(":8080", mux); err != nil {
+	zap.S().Debugf("start http server listening on %v proxy to grpc server;%v", cfg.HTTPListenAddress, cfg.GRPCListenAddress)
+	if err := http.ListenAndServe(cfg.HTTPListenAddress, mux); err != nil {
 		zap.L().Fatal("http listenAndServe failed")
 	}
 }
@@ -169,6 +207,7 @@ func RunHTTPServer() {
 func logWrapper(log *zap.Logger) server.HandlerWrapper {
 	return func(fn server.HandlerFunc) server.HandlerFunc {
 		return func(ctx context.Context, req server.Request, rsp interface{}) error {
+
 			log.Info("receive request",
 				zap.String("method", req.Method()),
 				zap.String("Service", req.Service()),

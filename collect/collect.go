@@ -20,8 +20,7 @@ type Fetcher interface {
 	Get(url *Request) ([]byte, error)
 }
 
-type BaseFetch struct {
-}
+type BaseFetch struct{}
 
 func (BaseFetch) Get(req *Request) ([]byte, error) {
 	resp, err := http.Get(req.URL)

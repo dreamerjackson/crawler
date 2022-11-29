@@ -23,6 +23,7 @@ require (
 	github.com/go-git/gcfg v1.5.0 // indirect
 	github.com/go-git/go-billy/v5 v5.3.1 // indirect
 	github.com/go-git/go-git/v5 v5.4.2 // indirect
+	github.com/go-micro/plugins/v4/config/encoder/toml v1.2.0 // indirect
 	github.com/go-micro/plugins/v4/registry/etcd v1.2.0 // indirect
 	github.com/go-micro/plugins/v4/server/grpc v1.2.0 // indirect
 	github.com/go-sql-driver/mysql v1.6.0 // indirect

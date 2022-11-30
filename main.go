@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"github.com/dreamerjackson/crawler/limiter"
 	"github.com/dreamerjackson/crawler/spider"
 	"go-micro.dev/v4/config"
@@ -11,6 +13,7 @@ import (
 	"go-micro.dev/v4/config/source/file"
 	"golang.org/x/time/rate"
 	"net/http"
+	"os"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -35,7 +38,25 @@ import (
 	"google.golang.org/grpc"
 )
 
+// Version information.
+var (
+	BuildTS   = "None"
+	GitHash   = "None"
+	GitBranch = "None"
+	Version   = "None"
+)
+
+var (
+	PrintVersion = flag.Bool("version", false, "print the version of this build")
+)
+
 func main() {
+	flag.Parse()
+	if *PrintVersion {
+		Printer()
+		os.Exit(0)
+	}
+
 	var (
 		err     error
 		logger  *zap.Logger
@@ -47,7 +68,7 @@ func main() {
 	enc := toml.NewEncoder()
 	cfg, err := config.NewConfig(config.WithReader(json.NewReader(reader.WithEncoder(enc))))
 	err = cfg.Load(file.NewSource(
-		file.WithPath("/Users/jackson/career/crawler/config.toml"),
+		file.WithPath("config.toml"),
 		source.WithEncoder(enc),
 	))
 
@@ -97,7 +118,6 @@ func main() {
 	if err := cfg.Get("Tasks").Scan(&tcfg); err != nil {
 		logger.Error("init seed tasks", zap.Error(err))
 	}
-
 	seeds := ParseTaskConfig(logger, f, storage, tcfg)
 
 	s := engine.NewEngine(
@@ -249,4 +269,23 @@ func ParseTaskConfig(logger *zap.Logger, f spider.Fetcher, s spider.Storage, cfg
 		tasks = append(tasks, t)
 	}
 	return tasks
+}
+
+func GetVersion() string {
+	if GitHash != "" {
+		h := GitHash
+		if len(h) > 7 {
+			h = h[:7]
+		}
+		return fmt.Sprintf("%s-%s", Version, h)
+	}
+	return Version
+}
+
+// Printer print build version
+func Printer() {
+	fmt.Println("Version:          ", GetVersion())
+	fmt.Println("Git Branch:       ", GitBranch)
+	fmt.Println("Git Commit:       ", GitHash)
+	fmt.Println("Build Time (UTC): ", BuildTS)
 }

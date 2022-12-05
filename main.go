@@ -16,7 +16,6 @@ import (
 	"os"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/dreamerjackson/crawler/collect"

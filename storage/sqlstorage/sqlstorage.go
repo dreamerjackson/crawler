@@ -2,6 +2,7 @@ package sqlstorage
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/dreamerjackson/crawler/spider"
 
 	"github.com/dreamerjackson/crawler/engine"
@@ -53,6 +54,7 @@ func (s *SQLStorage) Save(dataCells ...*spider.DataCell) error {
 			})
 			if err != nil {
 				s.logger.Error("create table falied", zap.Error(err))
+				continue
 			}
 
 			s.Table[name] = struct{}{}
@@ -101,10 +103,17 @@ func (s *SQLStorage) Flush() error {
 	}()
 
 	args := make([]interface{}, 0)
-
+	var ruleName string
+	var taskName string
+	var ok bool
 	for _, datacell := range s.dataDocker {
-		ruleName := datacell.Data["Rule"].(string)
-		taskName := datacell.Data["Task"].(string)
+		if ruleName, ok = datacell.Data["Rule"].(string); !ok {
+			return errors.New("no rule field")
+		}
+
+		if taskName, ok = datacell.Data["Task"].(string); !ok {
+			return errors.New("no task field")
+		}
 		fields := engine.GetFields(taskName, ruleName)
 
 		data := datacell.Data["Data"].(map[string]interface{})
@@ -126,9 +135,12 @@ func (s *SQLStorage) Flush() error {
 				}
 			}
 		}
-
-		value = append(value, datacell.Data["URL"].(string), datacell.Data["Time"].(string))
-
+		if v, ok := datacell.Data["URL"].(string); ok {
+			value = append(value, v)
+		}
+		if v, ok := datacell.Data["Time"].(string); ok {
+			value = append(value, v)
+		}
 		for _, v := range value {
 			args = append(args, v)
 		}

@@ -2,8 +2,8 @@ package master
 
 import (
 	"context"
-	"fmt"
 	"github.com/dreamerjackson/crawler/log"
+	"github.com/dreamerjackson/crawler/master"
 	"github.com/dreamerjackson/crawler/proto/greeter"
 	"github.com/go-micro/plugins/v4/config/encoder/toml"
 	"github.com/go-micro/plugins/v4/registry/etcd"
@@ -57,14 +57,19 @@ func Run() {
 	// set zap global logger
 	zap.ReplaceGlobals(logger)
 
-	//
-	fmt.Println("hello master")
-
 	var sconfig ServerConfig
 	if err := cfg.Get("MasterServer").Scan(&sconfig); err != nil {
 		logger.Error("get GRPC Server config failed", zap.Error(err))
 	}
 	logger.Sugar().Debugf("grpc server config,%+v", sconfig)
+
+	//
+	master.New(
+		sconfig.ID,
+		master.WithLogger(logger.Named("master")),
+		master.WithGRPCAddress(sconfig.GRPCListenAddress),
+		master.WithregistryURL(sconfig.RegistryAddress),
+	)
 
 	// start http proxy to GRPC
 	go RunHTTPServer(sconfig)

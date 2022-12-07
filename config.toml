@@ -24,9 +24,6 @@ ClientTimeOut   = 10
 Name = "go.micro.server.worker"
 
 [MasterServer]
-HTTPListenAddress = ":8081"
-GRPCListenAddress = ":9091"
-ID = "1"
 RegistryAddress = ":2379"
 RegisterTTL = 60
 RegisterInterval = 15

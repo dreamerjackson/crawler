@@ -14,6 +14,7 @@ import (
 	"github.com/go-micro/plugins/v4/registry/etcd"
 	"github.com/go-micro/plugins/v4/server/grpc"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/spf13/cobra"
 	"go-micro.dev/v4"
 	"go-micro.dev/v4/client"
 	"go-micro.dev/v4/config"
@@ -31,6 +32,32 @@ import (
 	"net/http"
 	"time"
 )
+
+var ServiceName string = "go.micro.server.worker"
+
+var WorkerCmd = &cobra.Command{
+	Use:   "worker",
+	Short: "run worker service.",
+	Long:  "run worker service.",
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		Run()
+	},
+}
+
+func init() {
+	WorkerCmd.Flags().StringVar(
+		&workerID, "id", "1", "set master id")
+	WorkerCmd.Flags().StringVar(
+		&HTTPListenAddress, "http", ":8080", "set HTTP listen address")
+
+	WorkerCmd.Flags().StringVar(
+		&GRPCListenAddress, "grpc", ":9090", "set GRPC listen address")
+}
+
+var workerID string
+var HTTPListenAddress string
+var GRPCListenAddress string
 
 func Run() {
 	var (
@@ -96,7 +123,7 @@ func Run() {
 	}
 	seeds := ParseTaskConfig(logger, f, storage, tcfg)
 
-	s := engine.NewEngine(
+	_ = engine.NewEngine(
 		engine.WithFetcher(f),
 		engine.WithLogger(logger),
 		engine.WithWorkCount(5),
@@ -105,7 +132,7 @@ func Run() {
 	)
 
 	// worker start
-	go s.Run()
+	//go s.Run()
 
 	var sconfig ServerConfig
 	if err := cfg.Get("GRPCServer").Scan(&sconfig); err != nil {
@@ -121,23 +148,20 @@ func Run() {
 }
 
 type ServerConfig struct {
-	GRPCListenAddress string
-	HTTPListenAddress string
-	ID                string
-	RegistryAddress   string
-	RegisterTTL       int
-	RegisterInterval  int
-	Name              string
-	ClientTimeOut     int
+	RegistryAddress  string
+	RegisterTTL      int
+	RegisterInterval int
+	Name             string
+	ClientTimeOut    int
 }
 
 func RunGRPCServer(logger *zap.Logger, cfg ServerConfig) {
 	reg := etcd.NewRegistry(registry.Addrs(cfg.RegistryAddress))
 	service := micro.NewService(
 		micro.Server(grpc.NewServer(
-			server.Id(cfg.ID),
+			server.Id(workerID),
 		)),
-		micro.Address(cfg.GRPCListenAddress),
+		micro.Address(GRPCListenAddress),
 		micro.Registry(reg),
 		micro.RegisterTTL(time.Duration(cfg.RegisterTTL)*time.Second),
 		micro.RegisterInterval(time.Duration(cfg.RegisterInterval)*time.Second),
@@ -182,11 +206,11 @@ func RunHTTPServer(cfg ServerConfig) {
 		grpc2.WithTransportCredentials(insecure.NewCredentials()),
 	}
 
-	if err := greeter.RegisterGreeterGwFromEndpoint(ctx, mux, cfg.GRPCListenAddress, opts); err != nil {
+	if err := greeter.RegisterGreeterGwFromEndpoint(ctx, mux, GRPCListenAddress, opts); err != nil {
 		zap.L().Fatal("Register backend grpc server endpoint failed")
 	}
-	zap.S().Debugf("start http server listening on %v proxy to grpc server;%v", cfg.HTTPListenAddress, cfg.GRPCListenAddress)
-	if err := http.ListenAndServe(cfg.HTTPListenAddress, mux); err != nil {
+	zap.S().Debugf("start http server listening on %v proxy to grpc server;%v", HTTPListenAddress, GRPCListenAddress)
+	if err := http.ListenAndServe(HTTPListenAddress, mux); err != nil {
 		zap.L().Fatal("http listenAndServe failed")
 	}
 }

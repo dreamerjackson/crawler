@@ -4,15 +4,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dreamerjackson/crawler/cmd/worker"
+	"go-micro.dev/v4/registry"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"go.uber.org/zap"
 	"net"
+	"reflect"
+	"sync/atomic"
 	"time"
 )
 
 type Master struct {
-	ID string
+	ID        string
+	ready     int32
+	leaderID  string
+	workNodes map[string]*registry.Node
 	options
 }
 
@@ -40,6 +47,10 @@ func genMasterID(id string, ipv4 string, GRPCAddress string) string {
 	return "master" + id + "-" + ipv4 + GRPCAddress
 }
 
+func (m *Master) IsLeader() bool {
+	return atomic.LoadInt32(&m.ready) != 0
+}
+
 func (m *Master) Campaign() {
 	endpoints := []string{m.registryURL}
 	cli, err := clientv3.New(clientv3.Config{Endpoints: endpoints})
@@ -57,13 +68,12 @@ func (m *Master) Campaign() {
 	e := concurrency.NewElection(s, "/resources/election")
 	leaderCh := make(chan error)
 	go m.elect(e, leaderCh)
-
 	leaderChange := e.Observe(context.Background())
-
 	select {
 	case resp := <-leaderChange:
 		m.logger.Info("watch leader change", zap.String("leader:", string(resp.Kvs[0].Value)))
 	}
+	workerNodeChange := m.WatchWorker()
 
 	for {
 		select {
@@ -73,18 +83,32 @@ func (m *Master) Campaign() {
 				go m.elect(e, leaderCh)
 			} else {
 				m.logger.Info("master change to leader")
+				m.leaderID = m.ID
+				if !m.IsLeader() {
+					m.BecomeLeader()
+				}
 			}
 		case resp := <-leaderChange:
 			if len(resp.Kvs) > 0 {
 				m.logger.Info("watch leader change", zap.String("leader:", string(resp.Kvs[0].Value)))
 			}
-		case <-time.After(10 * time.Second):
+		case resp := <-workerNodeChange:
+			m.logger.Info("watch worker change", zap.Any("worker:", resp))
+			m.updateNodes()
+		case <-time.After(20 * time.Second):
 			rsp, err := e.Leader(context.Background())
 			if err != nil {
 				m.logger.Info("get Leader failed", zap.Error(err))
+				if errors.Is(err, concurrency.ErrElectionNoLeader) {
+					go m.elect(e, leaderCh)
+				}
 			}
 			if rsp != nil && len(rsp.Kvs) > 0 {
 				m.logger.Debug("get Leader", zap.String("value", string(rsp.Kvs[0].Value)))
+				if m.IsLeader() && m.ID != string(rsp.Kvs[0].Value) {
+					//当前已不再是leader
+					atomic.StoreInt32(&m.ready, 0)
+				}
 			}
 		}
 	}
@@ -94,6 +118,70 @@ func (m *Master) elect(e *concurrency.Election, ch chan error) {
 	// 堵塞直到选取成功
 	err := e.Campaign(context.Background(), m.ID)
 	ch <- err
+}
+
+func (m *Master) WatchWorker() chan *registry.Result {
+	watch, err := m.registry.Watch(registry.WatchService(worker.ServiceName))
+	if err != nil {
+		panic(err)
+	}
+	ch := make(chan *registry.Result)
+	go func() {
+		for {
+			res, err := watch.Next()
+			if err != nil {
+				m.logger.Info("watch worker service failed", zap.Error(err))
+				continue
+			}
+			ch <- res
+		}
+	}()
+	return ch
+
+}
+func (m *Master) BecomeLeader() {
+	atomic.StoreInt32(&m.ready, 1)
+}
+
+func (m *Master) updateNodes() {
+	services, err := m.registry.GetService(worker.ServiceName)
+	if err != nil {
+		m.logger.Error("get service", zap.Error(err))
+	}
+
+	nodes := make(map[string]*registry.Node)
+	if len(services) > 0 {
+		for _, spec := range services[0].Nodes {
+			nodes[spec.Id] = spec
+		}
+	}
+
+	added, deleted, changed := workNodeDiff(m.workNodes, nodes)
+	m.logger.Sugar().Info("worker joined: ", added, ", leaved: ", deleted, ", changed: ", changed)
+
+	m.workNodes = nodes
+
+}
+
+func workNodeDiff(old map[string]*registry.Node, new map[string]*registry.Node) ([]string, []string, []string) {
+	added := make([]string, 0)
+	deleted := make([]string, 0)
+	changed := make([]string, 0)
+	for k, v := range new {
+		if ov, ok := old[k]; ok {
+			if !reflect.DeepEqual(v, ov) {
+				changed = append(changed, k)
+			}
+		} else {
+			added = append(added, k)
+		}
+	}
+	for k := range old {
+		if _, ok := new[k]; !ok {
+			deleted = append(deleted, k)
+		}
+	}
+	return added, deleted, changed
 }
 
 // 获取本机网卡IP

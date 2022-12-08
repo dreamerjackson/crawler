@@ -1,6 +1,7 @@
 package master
 
 import (
+	"go-micro.dev/v4/registry"
 	"go.uber.org/zap"
 )
 
@@ -8,6 +9,7 @@ type options struct {
 	logger      *zap.Logger
 	registryURL string
 	GRPCAddress string
+	registry    registry.Registry
 }
 
 var defaultOptions = options{
@@ -31,5 +33,11 @@ func WithregistryURL(registryURL string) Option {
 func WithGRPCAddress(GRPCAddress string) Option {
 	return func(opts *options) {
 		opts.GRPCAddress = GRPCAddress
+	}
+}
+
+func WithRegistry(registry registry.Registry) Option {
+	return func(opts *options) {
+		opts.registry = registry
 	}
 }

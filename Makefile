@@ -21,3 +21,10 @@ build:
 
 lint:
 	golangci-lint run ./...
+
+imports:
+	goimports -w .
+
+cover:
+	go test ./... -v -short -coverprofile .coverage.txt
+	go tool cover -func .coverage.txt

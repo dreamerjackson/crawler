@@ -125,6 +125,16 @@ func TestSqldb_InsertTable(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "no column",
+			args: args{TableData{
+				TableName:   tableName,
+				ColumnNames: nil,
+				Args:        []interface{}{"book1", 2},
+				DataCount:   1,
+			}},
+			wantErr: true,
+		},
+		{
 			name: "insert_multi_data",
 			args: args{TableData{
 				TableName:   tableName,
@@ -152,7 +162,7 @@ func TestSqldb_InsertTable(t *testing.T) {
 				Args:        []interface{}{"book2", "rrr"},
 				DataCount:   1,
 			}},
-			wantErr: false,
+			wantErr: true,
 		},
 	}
 

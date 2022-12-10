@@ -3,3 +3,5 @@
 *.txt
 main
 *.out
+*.test
+testdata

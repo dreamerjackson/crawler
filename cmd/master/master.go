@@ -135,11 +135,11 @@ func RunGRPCServer(logger *zap.Logger, reg registry.Registry, cfg ServerConfig) 
 	service.Init()
 
 	if err := greeter.RegisterGreeterHandler(service.Server(), new(Greeter)); err != nil {
-		logger.Fatal("register handler failed")
+		logger.Fatal("register handler failed", zap.Error(err))
 	}
 
 	if err := service.Run(); err != nil {
-		logger.Fatal("grpc server stop")
+		logger.Fatal("grpc server stop", zap.Error(err))
 	}
 }
 
@@ -163,11 +163,11 @@ func RunHTTPServer(cfg ServerConfig) {
 	}
 
 	if err := greeter.RegisterGreeterGwFromEndpoint(ctx, mux, GRPCListenAddress, opts); err != nil {
-		zap.L().Fatal("Register backend grpc server endpoint failed")
+		zap.L().Fatal("Register backend grpc server endpoint failed", zap.Error(err))
 	}
 	zap.S().Debugf("start master http server listening on %v proxy to grpc server;%v", HTTPListenAddress, GRPCListenAddress)
 	if err := http.ListenAndServe(HTTPListenAddress, mux); err != nil {
-		zap.L().Fatal("http listenAndServe failed")
+		zap.L().Fatal("http listenAndServe failed", zap.Error(err))
 	}
 }
 

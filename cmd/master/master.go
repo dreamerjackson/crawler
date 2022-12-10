@@ -2,9 +2,11 @@ package master
 
 import (
 	"context"
+	"github.com/dreamerjackson/crawler/cmd/worker"
 	"github.com/dreamerjackson/crawler/log"
 	"github.com/dreamerjackson/crawler/master"
 	"github.com/dreamerjackson/crawler/proto/greeter"
+	"github.com/dreamerjackson/crawler/spider"
 	"github.com/go-micro/plugins/v4/config/encoder/toml"
 	"github.com/go-micro/plugins/v4/registry/etcd"
 	"github.com/go-micro/plugins/v4/server/grpc"
@@ -89,12 +91,21 @@ func Run() {
 	logger.Sugar().Debugf("grpc server config,%+v", sconfig)
 
 	reg := etcd.NewRegistry(registry.Addrs(sconfig.RegistryAddress))
+
+	// init tasks
+	var tcfg []spider.TaskConfig
+	if err := cfg.Get("Tasks").Scan(&tcfg); err != nil {
+		logger.Error("init seed tasks", zap.Error(err))
+	}
+	seeds := worker.ParseTaskConfig(logger, nil, nil, tcfg)
+
 	master.New(
 		masterID,
 		master.WithLogger(logger.Named("master")),
 		master.WithGRPCAddress(GRPCListenAddress),
 		master.WithregistryURL(sconfig.RegistryAddress),
 		master.WithRegistry(reg),
+		master.WithSeeds(seeds),
 	)
 
 	// start http proxy to GRPC

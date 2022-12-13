@@ -13,6 +13,8 @@ import (
 	"go.uber.org/zap"
 	"net"
 	"reflect"
+	"sort"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -25,7 +27,7 @@ type Master struct {
 	ID        string
 	ready     int32
 	leaderID  string
-	workNodes map[string]*registry.Node
+	workNodes map[string]*NodeSpec
 	resources map[string]*ResourceSpec
 	IDGen     *snowflake.Node
 	etcdCli   *clientv3.Client
@@ -84,7 +86,7 @@ func (m *Master) Campaign() {
 	defer s.Close()
 
 	// 创建一个新的etcd选举election
-	e := concurrency.NewElection(s, "/resources/election")
+	e := concurrency.NewElection(s, "/crawler/election")
 	leaderCh := make(chan error)
 	go m.elect(e, leaderCh)
 	leaderChange := e.Observe(context.Background())
@@ -116,6 +118,7 @@ func (m *Master) Campaign() {
 		case resp := <-workerNodeChange:
 			m.logger.Info("watch worker change", zap.Any("worker:", resp))
 			m.updateWorkNodes()
+			m.reAssign()
 		case <-time.After(20 * time.Second):
 			rsp, err := e.Leader(context.Background())
 			if err != nil {
@@ -161,10 +164,12 @@ func (m *Master) WatchWorker() chan *registry.Result {
 
 }
 func (m *Master) BecomeLeader() error {
-
+	m.updateWorkNodes()
 	if err := m.loadResource(); err != nil {
 		return fmt.Errorf("loadResource failed:%w", err)
 	}
+
+	m.reAssign()
 
 	atomic.StoreInt32(&m.ready, 1)
 	return nil
@@ -176,10 +181,12 @@ func (m *Master) updateWorkNodes() {
 		m.logger.Error("get service", zap.Error(err))
 	}
 
-	nodes := make(map[string]*registry.Node)
+	nodes := make(map[string]*NodeSpec)
 	if len(services) > 0 {
 		for _, spec := range services[0].Nodes {
-			nodes[spec.Id] = spec
+			nodes[spec.Id] = &NodeSpec{
+				Node: spec,
+			}
 		}
 	}
 
@@ -200,6 +207,11 @@ const (
 type Message struct {
 	Cmd   Command
 	Specs []*ResourceSpec
+}
+
+type NodeSpec struct {
+	Node    *registry.Node
+	Payload int
 }
 
 type ResourceSpec struct {
@@ -232,7 +244,12 @@ func (m *Master) AddResource(rs []*ResourceSpec) {
 			m.logger.Error("assign failed", zap.Error(err))
 			continue
 		}
-		r.AssignedNode = ns.Id + "|" + ns.Address
+		if ns.Node == nil {
+			m.logger.Error("no node to assgin")
+			continue
+		}
+
+		r.AssignedNode = ns.Node.Id + "|" + ns.Node.Address
 		r.CreationTime = time.Now().UnixNano()
 		m.logger.Debug("add resource", zap.Any("specs", r))
 
@@ -242,6 +259,7 @@ func (m *Master) AddResource(rs []*ResourceSpec) {
 			continue
 		}
 		m.resources[r.Name] = r
+		ns.Payload++
 	}
 }
 
@@ -258,17 +276,29 @@ func (m *Master) HandleMsg() {
 
 }
 
-func (m *Master) Assign(r *ResourceSpec) (*registry.Node, error) {
-	for _, n := range m.workNodes {
-		return n, nil
+func (m *Master) Assign(r *ResourceSpec) (*NodeSpec, error) {
+	candidates := make([]*NodeSpec, 0, len(m.workNodes))
+
+	for _, node := range m.workNodes {
+		candidates = append(candidates, node)
 	}
+
+	//  找到最低的负载
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].Payload < candidates[j].Payload
+	})
+
+	if len(candidates) > 0 {
+		return candidates[0], nil
+	}
+
 	return nil, errors.New("no worker nodes")
 }
 
 func (m *Master) AddSeed() {
 	rs := make([]*ResourceSpec, 0, len(m.Seeds))
 	for _, seed := range m.Seeds {
-		resp, err := m.etcdCli.Get(context.Background(), getResourcePath(seed.Name), clientv3.WithSerializable())
+		resp, err := m.etcdCli.Get(context.Background(), getResourcePath(seed.Name), clientv3.WithPrefix(), clientv3.WithSerializable())
 		if err != nil {
 			m.logger.Error("etcd get faiiled", zap.Error(err))
 			continue
@@ -285,7 +315,7 @@ func (m *Master) AddSeed() {
 }
 
 func (m *Master) loadResource() error {
-	resp, err := m.etcdCli.Get(context.Background(), RESOURCEPATH, clientv3.WithSerializable())
+	resp, err := m.etcdCli.Get(context.Background(), RESOURCEPATH, clientv3.WithPrefix(), clientv3.WithSerializable())
 	if err != nil {
 		return fmt.Errorf("etcd get failed")
 	}
@@ -299,16 +329,58 @@ func (m *Master) loadResource() error {
 	}
 	m.logger.Info("leader init load resource", zap.Int("lenth", len(m.resources)))
 	m.resources = resources
+
+	for _, r := range m.resources {
+		if r.AssignedNode != "" {
+			id, err := getNodeID(r.AssignedNode)
+			if err != nil {
+				m.logger.Error("getNodeID failed", zap.Error(err))
+			}
+			node := m.workNodes[id]
+			node.Payload++
+		}
+	}
+
 	return nil
 }
 
-func workNodeDiff(old map[string]*registry.Node, new map[string]*registry.Node) ([]string, []string, []string) {
+func (m *Master) reAssign() {
+	rs := make([]*ResourceSpec, 0, len(m.resources))
+
+	for _, r := range m.resources {
+		if r.AssignedNode == "" {
+			continue
+		}
+
+		id, err := getNodeID(r.AssignedNode)
+
+		if err != nil {
+			m.logger.Error("get nodeid failed", zap.Error(err))
+		}
+
+		if _, ok := m.workNodes[id]; !ok {
+			rs = append(rs, r)
+		}
+	}
+	m.AddResource(rs)
+}
+
+func getNodeID(assigned string) (string, error) {
+	node := strings.Split(assigned, "|")
+	if len(node) < 2 {
+		return "", errors.New("")
+	}
+	id := node[0]
+	return id, nil
+}
+
+func workNodeDiff(old map[string]*NodeSpec, new map[string]*NodeSpec) ([]string, []string, []string) {
 	added := make([]string, 0)
 	deleted := make([]string, 0)
 	changed := make([]string, 0)
 	for k, v := range new {
 		if ov, ok := old[k]; ok {
-			if !reflect.DeepEqual(v, ov) {
+			if !reflect.DeepEqual(v.Node, ov.Node) {
 				changed = append(changed, k)
 			}
 		} else {

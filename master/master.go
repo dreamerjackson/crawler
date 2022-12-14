@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"github.com/bwmarrin/snowflake"
 	"github.com/dreamerjackson/crawler/cmd/worker"
+	proto "github.com/dreamerjackson/crawler/proto/crawler"
+	"github.com/golang/protobuf/ptypes/empty"
 	"go-micro.dev/v4/registry"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
@@ -32,6 +34,37 @@ type Master struct {
 	IDGen     *snowflake.Node
 	etcdCli   *clientv3.Client
 	options
+}
+
+func (m *Master) DeleteResource(ctx context.Context, spec *proto.ResourceSpec, empty *empty.Empty) error {
+	r, ok := m.resources[spec.Name]
+	if ok {
+		if _, err := m.etcdCli.Delete(context.Background(), getResourcePath(spec.Name)); err != nil {
+			return err
+		}
+	}
+
+	if r.AssignedNode != "" {
+		nodeID, err := getNodeID(r.AssignedNode)
+		if err != nil {
+			return err
+		}
+
+		if ns, ok := m.workNodes[nodeID]; ok {
+			ns.Payload -= 1
+		}
+	}
+	return nil
+}
+
+func (m *Master) AddResource(ctx context.Context, req *proto.ResourceSpec, resp *proto.NodeSpec) error {
+	fmt.Println(req)
+	nodeSpec, err := m.addResources(&ResourceSpec{Name: req.Name})
+	if nodeSpec != nil {
+		resp.Id = nodeSpec.Node.Id
+		resp.Address = nodeSpec.Node.Address
+	}
+	return err
 }
 
 func New(id string, opts ...Option) (*Master, error) {
@@ -67,7 +100,7 @@ func New(id string, opts ...Option) (*Master, error) {
 	m.AddSeed()
 	go m.Campaign()
 	go m.HandleMsg()
-	return &Master{}, nil
+	return m, nil
 }
 
 func genMasterID(id string, ipv4 string, GRPCAddress string) string {
@@ -236,31 +269,38 @@ func decode(ds []byte) (*ResourceSpec, error) {
 	return s, err
 }
 
-func (m *Master) AddResource(rs []*ResourceSpec) {
+func (m *Master) AddResources(rs []*ResourceSpec) {
 	for _, r := range rs {
-		r.ID = m.IDGen.Generate().String()
-		ns, err := m.Assign(r)
-		if err != nil {
-			m.logger.Error("assign failed", zap.Error(err))
-			continue
-		}
-		if ns.Node == nil {
-			m.logger.Error("no node to assgin")
-			continue
-		}
-
-		r.AssignedNode = ns.Node.Id + "|" + ns.Node.Address
-		r.CreationTime = time.Now().UnixNano()
-		m.logger.Debug("add resource", zap.Any("specs", r))
-
-		_, err = m.etcdCli.Put(context.Background(), getResourcePath(r.Name), encode(r))
-		if err != nil {
-			m.logger.Error("put etcd failed", zap.Error(err))
-			continue
-		}
-		m.resources[r.Name] = r
-		ns.Payload++
+		m.addResources(r)
 	}
+}
+
+func (m *Master) addResources(r *ResourceSpec) (*NodeSpec, error) {
+	r.ID = m.IDGen.Generate().String()
+	ns, err := m.Assign(r)
+	if err != nil {
+		m.logger.Error("assign failed", zap.Error(err))
+		return nil, err
+	}
+
+	if ns.Node == nil {
+		m.logger.Error("no node to assgin")
+		return nil, err
+	}
+
+	r.AssignedNode = ns.Node.Id + "|" + ns.Node.Address
+	r.CreationTime = time.Now().UnixNano()
+	m.logger.Debug("add resource", zap.Any("specs", r))
+
+	_, err = m.etcdCli.Put(context.Background(), getResourcePath(r.Name), encode(r))
+	if err != nil {
+		m.logger.Error("put etcd failed", zap.Error(err))
+		return nil, err
+	}
+
+	m.resources[r.Name] = r
+	ns.Payload++
+	return ns, nil
 }
 
 func (m *Master) HandleMsg() {
@@ -270,7 +310,7 @@ func (m *Master) HandleMsg() {
 	case msg := <-msgCh:
 		switch msg.Cmd {
 		case MSGADD:
-			m.AddResource(msg.Specs)
+			m.AddResources(msg.Specs)
 		}
 	}
 
@@ -311,7 +351,7 @@ func (m *Master) AddSeed() {
 		}
 	}
 
-	m.AddResource(rs)
+	m.AddResources(rs)
 }
 
 func (m *Master) loadResource() error {
@@ -336,8 +376,9 @@ func (m *Master) loadResource() error {
 			if err != nil {
 				m.logger.Error("getNodeID failed", zap.Error(err))
 			}
-			node := m.workNodes[id]
-			node.Payload++
+			if node, ok := m.workNodes[id]; ok {
+				node.Payload++
+			}
 		}
 	}
 
@@ -362,7 +403,7 @@ func (m *Master) reAssign() {
 			rs = append(rs, r)
 		}
 	}
-	m.AddResource(rs)
+	m.AddResources(rs)
 }
 
 func getNodeID(assigned string) (string, error) {

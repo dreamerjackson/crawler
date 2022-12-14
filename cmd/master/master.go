@@ -5,7 +5,7 @@ import (
 	"github.com/dreamerjackson/crawler/cmd/worker"
 	"github.com/dreamerjackson/crawler/log"
 	"github.com/dreamerjackson/crawler/master"
-	"github.com/dreamerjackson/crawler/proto/greeter"
+	"github.com/dreamerjackson/crawler/proto/crawler"
 	"github.com/dreamerjackson/crawler/spider"
 	"github.com/go-micro/plugins/v4/config/encoder/toml"
 	"github.com/go-micro/plugins/v4/registry/etcd"
@@ -99,7 +99,7 @@ func Run() {
 	}
 	seeds := worker.ParseTaskConfig(logger, nil, nil, tcfg)
 
-	master.New(
+	m, err := master.New(
 		masterID,
 		master.WithLogger(logger.Named("master")),
 		master.WithGRPCAddress(GRPCListenAddress),
@@ -107,12 +107,15 @@ func Run() {
 		master.WithRegistry(reg),
 		master.WithSeeds(seeds),
 	)
+	if err != nil {
+		logger.Error("init  master falied", zap.Error(err))
+	}
 
 	// start http proxy to GRPC
 	go RunHTTPServer(sconfig)
 
 	// start grpc server
-	RunGRPCServer(logger, reg, sconfig)
+	RunGRPCServer(m, logger, reg, sconfig)
 }
 
 type ServerConfig struct {
@@ -123,7 +126,7 @@ type ServerConfig struct {
 	ClientTimeOut    int
 }
 
-func RunGRPCServer(logger *zap.Logger, reg registry.Registry, cfg ServerConfig) {
+func RunGRPCServer(MasterService *master.Master, logger *zap.Logger, reg registry.Registry, cfg ServerConfig) {
 	service := micro.NewService(
 		micro.Server(grpc.NewServer(
 			server.Id(masterID),
@@ -145,21 +148,13 @@ func RunGRPCServer(logger *zap.Logger, reg registry.Registry, cfg ServerConfig) 
 
 	service.Init()
 
-	if err := greeter.RegisterGreeterHandler(service.Server(), new(Greeter)); err != nil {
+	if err := crawler.RegisterCrawlerMasterHandler(service.Server(), MasterService); err != nil {
 		logger.Fatal("register handler failed", zap.Error(err))
 	}
 
 	if err := service.Run(); err != nil {
 		logger.Fatal("grpc server stop", zap.Error(err))
 	}
-}
-
-type Greeter struct{}
-
-func (g *Greeter) Hello(ctx context.Context, req *greeter.Request, rsp *greeter.Response) error {
-	rsp.Greeting = "Hello " + req.Name
-
-	return nil
 }
 
 func RunHTTPServer(cfg ServerConfig) {
@@ -173,7 +168,7 @@ func RunHTTPServer(cfg ServerConfig) {
 		grpc2.WithTransportCredentials(insecure.NewCredentials()),
 	}
 
-	if err := greeter.RegisterGreeterGwFromEndpoint(ctx, mux, GRPCListenAddress, opts); err != nil {
+	if err := crawler.RegisterCrawlerMasterGwFromEndpoint(ctx, mux, GRPCListenAddress, opts); err != nil {
 		zap.L().Fatal("Register backend grpc server endpoint failed", zap.Error(err))
 	}
 	zap.S().Debugf("start master http server listening on %v proxy to grpc server;%v", HTTPListenAddress, GRPCListenAddress)

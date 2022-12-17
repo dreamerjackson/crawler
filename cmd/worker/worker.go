@@ -53,13 +53,23 @@ func init() {
 
 	WorkerCmd.Flags().StringVar(
 		&GRPCListenAddress, "grpc", ":9090", "set GRPC listen address")
+
+	WorkerCmd.Flags().StringVar(
+		&PProfListenAddress, "pprof", ":9981", "set GRPC listen address")
 }
 
 var workerID string
 var HTTPListenAddress string
 var GRPCListenAddress string
+var PProfListenAddress string
 
 func Run() {
+	go func() {
+		if err := http.ListenAndServe(PProfListenAddress, nil); err != nil {
+			panic(err)
+		}
+	}()
+
 	var (
 		err     error
 		logger  *zap.Logger

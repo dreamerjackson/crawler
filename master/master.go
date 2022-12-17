@@ -38,10 +38,13 @@ type Master struct {
 
 func (m *Master) DeleteResource(ctx context.Context, spec *proto.ResourceSpec, empty *empty.Empty) error {
 	r, ok := m.resources[spec.Name]
-	if ok {
-		if _, err := m.etcdCli.Delete(context.Background(), getResourcePath(spec.Name)); err != nil {
-			return err
-		}
+
+	if !ok {
+		return errors.New("no such task")
+	}
+
+	if _, err := m.etcdCli.Delete(context.Background(), getResourcePath(spec.Name)); err != nil {
+		return err
 	}
 
 	if r.AssignedNode != "" {
@@ -58,7 +61,6 @@ func (m *Master) DeleteResource(ctx context.Context, spec *proto.ResourceSpec, e
 }
 
 func (m *Master) AddResource(ctx context.Context, req *proto.ResourceSpec, resp *proto.NodeSpec) error {
-	fmt.Println(req)
 	nodeSpec, err := m.addResources(&ResourceSpec{Name: req.Name})
 	if nodeSpec != nil {
 		resp.Id = nodeSpec.Node.Id
@@ -151,6 +153,9 @@ func (m *Master) Campaign() {
 		case resp := <-workerNodeChange:
 			m.logger.Info("watch worker change", zap.Any("worker:", resp))
 			m.updateWorkNodes()
+			if err := m.loadResource(); err != nil {
+				m.logger.Error("loadResource failed:%w", zap.Error(err))
+			}
 			m.reAssign()
 		case <-time.After(20 * time.Second):
 			rsp, err := e.Leader(context.Background())
@@ -390,6 +395,7 @@ func (m *Master) reAssign() {
 
 	for _, r := range m.resources {
 		if r.AssignedNode == "" {
+			rs = append(rs, r)
 			continue
 		}
 

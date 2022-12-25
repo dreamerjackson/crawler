@@ -1,0 +1,14 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: crawl-worker
+  labels:
+    app: crawl-worker
+spec:
+  selector:
+    app: crawl-worker
+  ports:
+  - port: 8080
+    name: http
+  - port: 9090
+    name: grpc

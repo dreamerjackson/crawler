@@ -92,7 +92,7 @@ func ParseBookList(ctx *spider.Context) (spider.ParseResult, error) {
 		result.Requesrts = append(result.Requesrts, req)
 	}
 
-	zap.S().Debugln("parse book list,count:", len(result.Requesrts))
+	zap.S().Debugln("parse book list,count:", len(result.Requesrts), "url:", ctx.Req.URL)
 
 	return result, nil
 }

@@ -64,6 +64,7 @@ var GRPCListenAddress string
 var PProfListenAddress string
 
 func Run() {
+
 	go func() {
 		if err := http.ListenAndServe(PProfListenAddress, nil); err != nil {
 			panic(err)
@@ -142,7 +143,7 @@ func Run() {
 	)
 
 	// worker start
-	//go s.Run()
+	// go s.Run()
 
 	var sconfig ServerConfig
 	if err := cfg.Get("GRPCServer").Scan(&sconfig); err != nil {

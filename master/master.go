@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/bwmarrin/snowflake"
-	"github.com/dreamerjackson/crawler/cmd/worker"
 	proto "github.com/dreamerjackson/crawler/proto/crawler"
 	"github.com/golang/protobuf/ptypes/empty"
 	"go-micro.dev/v4/client"
@@ -18,12 +17,18 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
 
 const (
 	RESOURCEPATH = "/resources"
+
+	ADDRESOURCE = iota
+	DELETERESOURCE
+
+	ServiceName = "go.micro.server.worker"
 )
 
 type Master struct {
@@ -35,6 +40,8 @@ type Master struct {
 	IDGen      *snowflake.Node
 	etcdCli    *clientv3.Client
 	forwardCli proto.CrawlerMasterService
+	rlock      sync.Mutex
+
 	options
 }
 
@@ -43,6 +50,16 @@ func (m *Master) SetForwardCli(forwardCli proto.CrawlerMasterService) {
 }
 
 func (m *Master) DeleteResource(ctx context.Context, spec *proto.ResourceSpec, empty *empty.Empty) error {
+
+	if !m.IsLeader() && m.leaderID != "" && m.leaderID != m.ID {
+		addr := getLeaderAddress(m.leaderID)
+		_, err := m.forwardCli.DeleteResource(ctx, spec, client.WithAddress(addr))
+		return err
+	}
+
+	m.rlock.Lock()
+	defer m.rlock.Unlock()
+
 	r, ok := m.resources[spec.Name]
 
 	if !ok {
@@ -52,6 +69,8 @@ func (m *Master) DeleteResource(ctx context.Context, spec *proto.ResourceSpec, e
 	if _, err := m.etcdCli.Delete(context.Background(), getResourcePath(spec.Name)); err != nil {
 		return err
 	}
+
+	delete(m.resources, spec.Name)
 
 	if r.AssignedNode != "" {
 		nodeID, err := getNodeID(r.AssignedNode)
@@ -63,6 +82,7 @@ func (m *Master) DeleteResource(ctx context.Context, spec *proto.ResourceSpec, e
 			ns.Payload -= 1
 		}
 	}
+
 	return nil
 }
 
@@ -75,6 +95,8 @@ func (m *Master) AddResource(ctx context.Context, req *proto.ResourceSpec, resp 
 		return err
 	}
 
+	m.rlock.Lock()
+	defer m.rlock.Unlock()
 	nodeSpec, err := m.addResources(&ResourceSpec{Name: req.Name})
 	if nodeSpec != nil {
 		resp.Id = nodeSpec.Node.Id
@@ -123,7 +145,6 @@ func New(id string, opts ...Option) (*Master, error) {
 	m.updateWorkNodes()
 	m.AddSeed()
 	go m.Campaign()
-	go m.HandleMsg()
 	return m, nil
 }
 
@@ -212,7 +233,7 @@ func (m *Master) elect(e *concurrency.Election, ch chan error) {
 }
 
 func (m *Master) WatchWorker() chan *registry.Result {
-	watch, err := m.registry.Watch(registry.WatchService(worker.ServiceName))
+	watch, err := m.registry.Watch(registry.WatchService(ServiceName))
 	if err != nil {
 		panic(err)
 	}
@@ -243,11 +264,13 @@ func (m *Master) BecomeLeader() error {
 }
 
 func (m *Master) updateWorkNodes() {
-	services, err := m.registry.GetService(worker.ServiceName)
+	services, err := m.registry.GetService(ServiceName)
 	if err != nil {
 		m.logger.Error("get service", zap.Error(err))
 	}
 
+	m.rlock.Lock()
+	defer m.rlock.Unlock()
 	nodes := make(map[string]*NodeSpec)
 	if len(services) > 0 {
 		for _, spec := range services[0].Nodes {
@@ -259,7 +282,6 @@ func (m *Master) updateWorkNodes() {
 
 	added, deleted, changed := workNodeDiff(m.workNodes, nodes)
 	m.logger.Sugar().Info("worker joined: ", added, ", leaved: ", deleted, ", changed: ", changed)
-
 	m.workNodes = nodes
 
 }
@@ -297,16 +319,10 @@ func encode(s *ResourceSpec) string {
 	return string(b)
 }
 
-func decode(ds []byte) (*ResourceSpec, error) {
+func Decode(ds []byte) (*ResourceSpec, error) {
 	var s *ResourceSpec
 	err := json.Unmarshal(ds, &s)
 	return s, err
-}
-
-func (m *Master) AddResources(rs []*ResourceSpec) {
-	for _, r := range rs {
-		m.addResources(r)
-	}
 }
 
 func (m *Master) addResources(r *ResourceSpec) (*NodeSpec, error) {
@@ -331,26 +347,13 @@ func (m *Master) addResources(r *ResourceSpec) (*NodeSpec, error) {
 		m.logger.Error("put etcd failed", zap.Error(err))
 		return nil, err
 	}
-
 	m.resources[r.Name] = r
 	ns.Payload++
 	return ns, nil
 }
 
-func (m *Master) HandleMsg() {
-	msgCh := make(chan *Message)
-
-	select {
-	case msg := <-msgCh:
-		switch msg.Cmd {
-		case MSGADD:
-			m.AddResources(msg.Specs)
-		}
-	}
-
-}
-
 func (m *Master) Assign(r *ResourceSpec) (*NodeSpec, error) {
+
 	candidates := make([]*NodeSpec, 0, len(m.workNodes))
 
 	for _, node := range m.workNodes {
@@ -385,7 +388,9 @@ func (m *Master) AddSeed() {
 		}
 	}
 
-	m.AddResources(rs)
+	for _, r := range rs {
+		m.addResources(r)
+	}
 }
 
 func (m *Master) loadResource() error {
@@ -396,12 +401,14 @@ func (m *Master) loadResource() error {
 
 	resources := make(map[string]*ResourceSpec)
 	for _, kv := range resp.Kvs {
-		r, err := decode(kv.Value)
+		r, err := Decode(kv.Value)
 		if err == nil && r != nil {
 			resources[r.Name] = r
 		}
 	}
 	m.logger.Info("leader init load resource", zap.Int("lenth", len(m.resources)))
+	m.rlock.Lock()
+	defer m.rlock.Unlock()
 	m.resources = resources
 
 	for _, r := range m.resources {
@@ -410,7 +417,8 @@ func (m *Master) loadResource() error {
 			if err != nil {
 				m.logger.Error("getNodeID failed", zap.Error(err))
 			}
-			if node, ok := m.workNodes[id]; ok {
+			node, ok := m.workNodes[id]
+			if ok {
 				node.Payload++
 			}
 		}
@@ -421,6 +429,9 @@ func (m *Master) loadResource() error {
 
 func (m *Master) reAssign() {
 	rs := make([]*ResourceSpec, 0, len(m.resources))
+
+	m.rlock.Lock()
+	defer m.rlock.Unlock()
 
 	for _, r := range m.resources {
 		if r.AssignedNode == "" {
@@ -438,7 +449,10 @@ func (m *Master) reAssign() {
 			rs = append(rs, r)
 		}
 	}
-	m.AddResources(rs)
+
+	for _, r := range rs {
+		m.addResources(r)
+	}
 }
 
 func getNodeID(assigned string) (string, error) {

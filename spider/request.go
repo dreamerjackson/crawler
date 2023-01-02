@@ -102,6 +102,10 @@ func (r *Request) Check() error {
 		return errors.New("max depth limit reached")
 	}
 
+	if r.Task.Closed {
+		return errors.New("task has Closed")
+	}
+
 	return nil
 }
 

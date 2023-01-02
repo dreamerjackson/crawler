@@ -74,7 +74,7 @@ func ParseTag(ctx *spider.Context) (spider.ParseResult, error) {
 			})
 	}
 
-	zap.S().Debugln("parse book tag,count:", len(result.Requesrts))
+	zap.S().Debugln("parse book tag,count:", len(result.Requesrts), "url:", ctx.Req.URL)
 	return result, nil
 }
 

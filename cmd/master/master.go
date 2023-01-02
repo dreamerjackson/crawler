@@ -11,7 +11,10 @@ import (
 	"github.com/go-micro/plugins/v4/config/encoder/toml"
 	"github.com/go-micro/plugins/v4/registry/etcd"
 	"github.com/go-micro/plugins/v4/server/grpc"
+	"github.com/go-micro/plugins/v4/wrapper/breaker/hystrix"
+	ratePlugin "github.com/go-micro/plugins/v4/wrapper/ratelimiter/ratelimit"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/juju/ratelimit"
 	"github.com/spf13/cobra"
 	"go-micro.dev/v4"
 	"go-micro.dev/v4/client"
@@ -138,6 +141,9 @@ type ServerConfig struct {
 }
 
 func RunGRPCServer(m *master.Master, logger *zap.Logger, reg registry.Registry, cfg ServerConfig) {
+
+	b := ratelimit.NewBucketWithRate(0.5, 1)
+
 	service := micro.NewService(
 		micro.Server(grpc.NewServer(
 			server.Id(masterID),
@@ -147,9 +153,19 @@ func RunGRPCServer(m *master.Master, logger *zap.Logger, reg registry.Registry, 
 		micro.RegisterTTL(time.Duration(cfg.RegisterTTL)*time.Second),
 		micro.RegisterInterval(time.Duration(cfg.RegisterInterval)*time.Second),
 		micro.WrapHandler(logWrapper(logger)),
+		micro.WrapHandler(ratePlugin.NewHandlerWrapper(b, false)),
 		micro.Name(cfg.Name),
 		micro.Client(grpccli.NewClient()),
+		micro.WrapClient(hystrix.NewClientWrapper()),
 	)
+
+	hystrix.ConfigureCommand("go.micro.server.master.CrawlerMaster.AddResource", hystrix.CommandConfig{
+		Timeout:                10000,
+		MaxConcurrentRequests:  100,
+		RequestVolumeThreshold: 10,
+		SleepWindow:            6000,
+		ErrorPercentThreshold:  30,
+	})
 
 	cl := proto.NewCrawlerMasterService(cfg.Name, service.Client())
 	m.SetForwardCli(cl)
@@ -198,6 +214,7 @@ func logWrapper(log *zap.Logger) server.HandlerWrapper {
 			log.Info("receive request",
 				zap.String("method", req.Method()),
 				zap.String("Service", req.Service()),
+				zap.String("Endpoint", req.Endpoint()),
 				zap.Reflect("request param:", req.Body()),
 			)
 

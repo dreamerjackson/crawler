@@ -263,6 +263,18 @@ func (s *Schedule) Schedule() {
 			ch = s.workerCh
 		}
 
+		// 请求校验
+		if req != nil {
+			if err := req.Check(); err != nil {
+				zap.L().Debug("check failed",
+					zap.Error(err),
+				)
+				req = nil
+				ch = nil
+				continue
+			}
+		}
+
 		select {
 		case r := <-s.requestCh:
 			if r.Priority > 0 {
@@ -278,7 +290,7 @@ func (s *Schedule) Schedule() {
 }
 
 func (c *Crawler) Schedule() {
-	go c.scheduler.Schedule()
+	c.scheduler.Schedule()
 }
 
 func (c *Crawler) handleSeeds() {
@@ -321,7 +333,7 @@ func (c *Crawler) CreateWork() {
 	for {
 		req := c.scheduler.Pull()
 		if err := req.Check(); err != nil {
-			c.Logger.Error("check failed",
+			c.Logger.Debug("check failed",
 				zap.Error(err),
 			)
 
@@ -435,7 +447,7 @@ func (c *Crawler) SetFailure(req *spider.Request) {
 }
 
 func (c *Crawler) watchResource() {
-	watch := c.etcdCli.Watch(context.Background(), master.RESOURCEPATH, clientv3.WithPrefix())
+	watch := c.etcdCli.Watch(context.Background(), master.RESOURCEPATH, clientv3.WithPrefix(), clientv3.WithPrevKV())
 	for w := range watch {
 		if w.Err() != nil {
 			c.Logger.Error("watch resource failed", zap.Error(w.Err()))
@@ -446,22 +458,31 @@ func (c *Crawler) watchResource() {
 			return
 		}
 		for _, ev := range w.Events {
-			spec, err := master.Decode(ev.Kv.Value)
-			if err != nil {
-				c.Logger.Error("decode etcd value failed", zap.Error(err))
-			}
 
 			switch ev.Type {
 			case clientv3.EventTypePut:
+				spec, err := master.Decode(ev.Kv.Value)
+				if err != nil {
+					c.Logger.Error("decode etcd value failed", zap.Error(err))
+				}
 				if ev.IsCreate() {
 					c.Logger.Info("receive create resource", zap.Any("spec", spec))
-
 				} else if ev.IsModify() {
 					c.Logger.Info("receive update resource", zap.Any("spec", spec))
 				}
+
+				c.rlock.Lock()
 				c.runTasks(spec.Name)
+				c.rlock.Unlock()
 			case clientv3.EventTypeDelete:
+				spec, err := master.Decode(ev.PrevKv.Value)
 				c.Logger.Info("receive delete resource", zap.Any("spec", spec))
+				if err != nil {
+					c.Logger.Error("decode etcd value failed", zap.Error(err))
+				}
+				c.rlock.Lock()
+				c.deleteTasks(spec.Name)
+				c.rlock.Unlock()
 			}
 		}
 	}
@@ -495,19 +516,36 @@ func (c *Crawler) loadResource() error {
 	c.rlock.Lock()
 	defer c.rlock.Unlock()
 	c.resources = resources
-	for _, r := range c.resources {
+	for _, r := range resources {
 		c.runTasks(r.Name)
 	}
 
 	return nil
 }
 
-func (c *Crawler) runTasks(taskName string) {
+func (c *Crawler) deleteTasks(taskName string) {
 	t, ok := Store.Hash[taskName]
 	if !ok {
 		c.Logger.Error("can not find preset tasks", zap.String("task name", taskName))
 		return
 	}
+	t.Closed = true
+	delete(c.resources, taskName)
+}
+
+func (c *Crawler) runTasks(taskName string) {
+
+	if _, ok := c.resources[taskName]; ok {
+		c.Logger.Info("task has runing", zap.String("name", taskName))
+		return
+	}
+
+	t, ok := Store.Hash[taskName]
+	if !ok {
+		c.Logger.Error("can not find preset tasks", zap.String("task name", taskName))
+		return
+	}
+	t.Closed = false
 	res, err := t.Rule.Root()
 
 	if err != nil {
@@ -520,5 +558,6 @@ func (c *Crawler) runTasks(taskName string) {
 	for _, req := range res {
 		req.Task = t
 	}
+
 	c.scheduler.Push(res...)
 }

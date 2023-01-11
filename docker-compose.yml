@@ -1,0 +1,99 @@
+version: "3.9"
+services:
+  worker:
+    build: .
+    command: ./crawler worker --id=2 --http=:8080  --grpc=:9090
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    networks:
+      - counter-net
+    volumes:
+      - /tmp/app:/app
+    depends_on:
+      mysql:
+          condition: service_healthy
+      etcd:
+        condition: service_healthy
+  master:
+    build: .
+    command: ./crawler master --id=3 --http=:8082  --grpc=:9092
+    ports:
+      - "8082:8082"
+      - "9092:9092"
+    networks:
+      - counter-net
+    volumes:
+      - /tmp/app:/app
+    depends_on:
+      mysql:
+        condition: service_healthy
+      etcd:
+        condition: service_healthy
+  mysql:
+    image: mysql:5.7
+    #    restart: always
+    environment:
+      MYSQL_DATABASE: 'crawler'
+      MYSQL_USER: 'myuser'
+      MYSQL_PASSWORD: 'mypassword'
+      # Password for root access
+      MYSQL_ROOT_PASSWORD: '123456'
+      #      docker-compose默认时区UTC
+      TZ: 'Asia/Shanghai'
+    ports:
+      - '3326:3306'
+    expose:
+      # Opens port 3306 on the container
+      - '3306'
+      # Where our data will be persisted
+    volumes:
+      -  /tmp/data:/var/lib/mysql
+    networks:
+      counter-net:
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 55
+  etcd:
+    image: gcr.io/etcd-development/etcd:v3.5.6
+    volumes:
+      - /tmp/etcd:/etcd-data
+    ports:
+      - '2379:2379'
+      - '2380:2380'
+    expose:
+      - 2379
+      - 2380
+    networks:
+      counter-net:
+    environment:
+      - ETCDCTL_API=3
+    command:
+      - /usr/local/bin/etcd
+      - --data-dir=/etcd-data
+      - --name
+      - etcd
+      - --initial-advertise-peer-urls
+      - http://0.0.0.0:2380
+      - --listen-peer-urls
+      - http://0.0.0.0:2380
+      - --advertise-client-urls
+      - http://0.0.0.0:2379
+      - --listen-client-urls
+      - http://0.0.0.0:2379
+      - --initial-cluster
+      - etcd=http://0.0.0.0:2380
+      - --initial-cluster-state
+      - new
+      - --initial-cluster-token
+      - tkn
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/etcdctl" ,"get", "--prefix", "/"]
+      interval: 5s
+      timeout: 5s
+      retries: 55
+
+networks:
+  counter-net:

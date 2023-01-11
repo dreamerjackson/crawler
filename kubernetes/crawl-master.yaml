@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crawler-master-deployment
+  labels:
+    app: crawl-master
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crawl-master
+  template:
+    metadata:
+      labels:
+        app: crawl-master
+    spec:
+      containers:
+      - name: crawl-master
+        image: crawler:local
+        command:
+          - sh
+          - -c
+          - "./crawler master --podip=${MY_POD_IP}  --config=/app/config/config.toml"
+        ports:
+        - containerPort: 8081
+        env:
+        - name: MY_POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        volumeMounts:
+        - name: crawler-config
+          mountPath: /app/config/
+      volumes:
+      - name: crawler-config
+        configMap:
+          name: crawler-config

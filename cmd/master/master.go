@@ -2,7 +2,9 @@ package master
 
 import (
 	"context"
+	"fmt"
 	"github.com/dreamerjackson/crawler/cmd/worker"
+	"github.com/dreamerjackson/crawler/generator"
 	"github.com/dreamerjackson/crawler/log"
 	"github.com/dreamerjackson/crawler/master"
 	proto "github.com/dreamerjackson/crawler/proto/crawler"
@@ -30,6 +32,7 @@ import (
 	grpc2 "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -45,20 +48,25 @@ var MasterCmd = &cobra.Command{
 
 func init() {
 	MasterCmd.Flags().StringVar(
-		&masterID, "id", "1", "set master id")
+		&masterID, "id", "", "set master id")
+	MasterCmd.Flags().StringVar(
+		&cfgFile, "config", "config.toml", "set master id")
 	MasterCmd.Flags().StringVar(
 		&HTTPListenAddress, "http", ":8081", "set HTTP listen address")
 	MasterCmd.Flags().StringVar(
+		&podIP, "podip", "", "set worker id")
+	MasterCmd.Flags().StringVar(
 		&GRPCListenAddress, "grpc", ":9091", "set GRPC listen address")
 	MasterCmd.Flags().StringVar(
-		&PProfListenAddress, "pprof", ":9981", "set GRPC listen address")
-
+		&PProfListenAddress, "pprof", ":9981", "set pprof address")
 }
 
 var masterID string
+var cfgFile string
 var HTTPListenAddress string
 var GRPCListenAddress string
 var PProfListenAddress string
+var podIP string
 
 func Run() {
 	// start pprof
@@ -77,7 +85,7 @@ func Run() {
 	enc := toml.NewEncoder()
 	cfg, err := config.NewConfig(config.WithReader(json.NewReader(reader.WithEncoder(enc))))
 	err = cfg.Load(file.NewSource(
-		file.WithPath("config.toml"),
+		file.WithPath(cfgFile),
 		source.WithEncoder(enc),
 	))
 
@@ -143,7 +151,15 @@ type ServerConfig struct {
 func RunGRPCServer(m *master.Master, logger *zap.Logger, reg registry.Registry, cfg ServerConfig) {
 
 	b := ratelimit.NewBucketWithRate(0.5, 1)
-
+	if masterID == "" {
+		if podIP != "" {
+			ip := generator.IDbyIP(podIP)
+			masterID = strconv.Itoa(int(ip))
+		} else {
+			masterID = fmt.Sprintf("%d", time.Now().UnixNano())
+		}
+	}
+	zap.S().Debug("master id:", masterID)
 	service := micro.NewService(
 		micro.Server(grpc.NewServer(
 			server.Id(masterID),

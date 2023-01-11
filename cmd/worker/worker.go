@@ -2,8 +2,10 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"github.com/dreamerjackson/crawler/collect"
 	"github.com/dreamerjackson/crawler/engine"
+	"github.com/dreamerjackson/crawler/generator"
 	"github.com/dreamerjackson/crawler/limiter"
 	"github.com/dreamerjackson/crawler/log"
 	"github.com/dreamerjackson/crawler/proto/greeter"
@@ -30,6 +32,7 @@ import (
 	grpc2 "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -47,7 +50,11 @@ var WorkerCmd = &cobra.Command{
 
 func init() {
 	WorkerCmd.Flags().StringVar(
-		&workerID, "id", "1", "set master id")
+		&workerID, "id", "", "set worker id")
+
+	WorkerCmd.Flags().StringVar(
+		&podIP, "podip", "", "set worker id")
+
 	WorkerCmd.Flags().StringVar(
 		&HTTPListenAddress, "http", ":8080", "set HTTP listen address")
 
@@ -55,7 +62,7 @@ func init() {
 		&GRPCListenAddress, "grpc", ":9090", "set GRPC listen address")
 
 	WorkerCmd.Flags().StringVar(
-		&PProfListenAddress, "pprof", ":9981", "set GRPC listen address")
+		&PProfListenAddress, "pprof", ":9981", "set pprof address")
 
 	WorkerCmd.Flags().BoolVar(
 		&cluster, "cluster", true, "run mode")
@@ -68,6 +75,7 @@ var workerID string
 var HTTPListenAddress string
 var GRPCListenAddress string
 var PProfListenAddress string
+var podIP string
 
 func Run() {
 
@@ -160,7 +168,17 @@ func Run() {
 		panic(err)
 	}
 
+	if workerID == "" {
+		if podIP != "" {
+			ip := generator.IDbyIP(podIP)
+			workerID = strconv.Itoa(int(ip))
+		} else {
+			workerID = fmt.Sprintf("%d", time.Now().UnixNano())
+		}
+	}
+
 	id := sconfig.Name + "-" + workerID
+	zap.S().Debug("worker id:", id)
 
 	// worker start
 	go s.Run(id, cluster)

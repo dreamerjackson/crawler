@@ -153,7 +153,7 @@ func RunGRPCServer(m *master.Master, logger *zap.Logger, reg registry.Registry, 
 	b := ratelimit.NewBucketWithRate(0.5, 1)
 	if masterID == "" {
 		if podIP != "" {
-			ip := generator.IDbyIP(podIP)
+			ip := generator.GetIDbyIP(podIP)
 			masterID = strconv.Itoa(int(ip))
 		} else {
 			masterID = fmt.Sprintf("%d", time.Now().UnixNano())

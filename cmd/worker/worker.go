@@ -170,7 +170,7 @@ func Run() {
 
 	if workerID == "" {
 		if podIP != "" {
-			ip := generator.IDbyIP(podIP)
+			ip := generator.GetIDbyIP(podIP)
 			workerID = strconv.Itoa(int(ip))
 		} else {
 			workerID = fmt.Sprintf("%d", time.Now().UnixNano())

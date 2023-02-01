@@ -3,15 +3,14 @@ package worker
 import (
 	"context"
 	"fmt"
-	"github.com/dreamerjackson/crawler/collect"
-	"github.com/dreamerjackson/crawler/engine"
 	"github.com/dreamerjackson/crawler/generator"
 	"github.com/dreamerjackson/crawler/limiter"
 	"github.com/dreamerjackson/crawler/log"
 	"github.com/dreamerjackson/crawler/proto/greeter"
 	"github.com/dreamerjackson/crawler/proxy"
 	"github.com/dreamerjackson/crawler/spider"
-	"github.com/dreamerjackson/crawler/storage/sqlstorage"
+	engine "github.com/dreamerjackson/crawler/spider/manager"
+	sqlstorage "github.com/dreamerjackson/crawler/sqlstorage"
 	"github.com/go-micro/plugins/v4/config/encoder/toml"
 	"github.com/go-micro/plugins/v4/registry/etcd"
 	"github.com/go-micro/plugins/v4/server/grpc"
@@ -89,7 +88,7 @@ func Run() {
 		err     error
 		logger  *zap.Logger
 		p       proxy.Func
-		storage spider.Storage
+		storage spider.DataRepository
 	)
 
 	// load config
@@ -124,11 +123,7 @@ func Run() {
 	if p, err = proxy.RoundRobinProxySwitcher(proxyURLs...); err != nil {
 		logger.Error("RoundRobinProxySwitcher failed", zap.Error(err))
 	}
-	var f spider.Fetcher = &collect.BrowserFetch{
-		Timeout: time.Duration(timeout) * time.Millisecond,
-		Logger:  logger,
-		Proxy:   p,
-	}
+	f := spider.NewFetchService(spider.BrowserFetchType)
 
 	// storage
 	sqlURL := cfg.Get("storage", "sqlURL").String("")
@@ -138,6 +133,7 @@ func Run() {
 		sqlstorage.WithBatchCount(2),
 	); err != nil {
 		logger.Error("create sqlstorage failed", zap.Error(err))
+		panic(err)
 		return
 	}
 
@@ -146,28 +142,13 @@ func Run() {
 	if err := cfg.Get("Tasks").Scan(&tcfg); err != nil {
 		logger.Error("init seed tasks", zap.Error(err))
 	}
-	seeds := ParseTaskConfig(logger, f, storage, tcfg)
+	seeds := ParseTaskConfig(logger, p, f, storage, tcfg)
 
 	var sconfig ServerConfig
 	if err := cfg.Get("GRPCServer").Scan(&sconfig); err != nil {
 		logger.Error("get GRPC Server config failed", zap.Error(err))
 	}
 	logger.Sugar().Debugf("grpc server config,%+v", sconfig)
-
-	s, err := engine.NewEngine(
-		engine.WithFetcher(f),
-		engine.WithLogger(logger),
-		engine.WithWorkCount(5),
-		engine.WithSeeds(seeds),
-		engine.WithregistryURL(sconfig.RegistryAddress),
-		engine.WithScheduler(engine.NewSchedule()),
-		engine.WithStorage(storage),
-	)
-
-	if err != nil {
-		panic(err)
-	}
-
 	if workerID == "" {
 		if podIP != "" {
 			ip := generator.GetIDbyIP(podIP)
@@ -180,8 +161,25 @@ func Run() {
 	id := sconfig.Name + "-" + workerID
 	zap.S().Debug("worker id:", id)
 
+	s, err := engine.NewWorkerService(
+		engine.WithFetcher(f),
+		engine.WithLogger(logger),
+		engine.WithWorkCount(5),
+		engine.WithSeeds(seeds),
+		engine.WithregistryURL(sconfig.RegistryAddress),
+		engine.WithScheduler(engine.NewSchedule()),
+		engine.WithStorage(storage),
+		engine.WithID(id),
+		engine.WithReqRepository(spider.NewReqHistoryRepository()),
+		engine.WithResourceRepository(spider.NewResourceRepository()),
+	)
+
+	if err != nil {
+		panic(err)
+	}
+
 	// worker start
-	go s.Run(id, cluster)
+	go s.Run(cluster)
 
 	// start http proxy to GRPC
 	go RunHTTPServer(sconfig)
@@ -275,7 +273,7 @@ func logWrapper(log *zap.Logger) server.HandlerWrapper {
 	}
 }
 
-func ParseTaskConfig(logger *zap.Logger, f spider.Fetcher, s spider.Storage, cfgs []spider.TaskConfig) []*spider.Task {
+func ParseTaskConfig(logger *zap.Logger, p proxy.Func, f spider.Fetcher, s spider.DataRepository, cfgs []spider.TaskConfig) []*spider.Task {
 	tasks := make([]*spider.Task, 0, 1000)
 	for _, cfg := range cfgs {
 		t := spider.NewTask(
@@ -284,6 +282,7 @@ func ParseTaskConfig(logger *zap.Logger, f spider.Fetcher, s spider.Storage, cfg
 			spider.WithCookie(cfg.Cookie),
 			spider.WithLogger(logger),
 			spider.WithStorage(s),
+			spider.WithProxy(p),
 		)
 
 		if cfg.WaitTime > 0 {

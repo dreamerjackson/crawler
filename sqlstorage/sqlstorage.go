@@ -4,9 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/dreamerjackson/crawler/spider"
+	"github.com/dreamerjackson/crawler/sqlstorage/sqldb"
 
-	"github.com/dreamerjackson/crawler/engine"
-	"github.com/dreamerjackson/crawler/sqldb"
 	"go.uber.org/zap"
 )
 
@@ -75,7 +74,7 @@ func (s *SQLStorage) Save(dataCells ...*spider.DataCell) error {
 func getFields(cell *spider.DataCell) []sqldb.Field {
 	taskName := cell.Data["Task"].(string)
 	ruleName := cell.Data["Rule"].(string)
-	fields := engine.GetFields(taskName, ruleName)
+	fields := spider.GetFields(taskName, ruleName)
 
 	var columnNames []sqldb.Field
 	for _, field := range fields {
@@ -114,7 +113,7 @@ func (s *SQLStorage) Flush() error {
 		if taskName, ok = datacell.Data["Task"].(string); !ok {
 			return errors.New("no task field")
 		}
-		fields := engine.GetFields(taskName, ruleName)
+		fields := spider.GetFields(taskName, ruleName)
 
 		data := datacell.Data["Data"].(map[string]interface{})
 		value := []string{}

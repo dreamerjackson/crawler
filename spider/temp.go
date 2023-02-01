@@ -1,5 +1,10 @@
 package spider
 
+type Temper interface {
+	Get(key string) interface{}
+	Set(key string, value interface{}) error
+}
+
 type Temp struct {
 	data map[string]interface{}
 }

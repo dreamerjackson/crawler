@@ -3,12 +3,10 @@ package master
 import (
 	"context"
 	"fmt"
-	"github.com/dreamerjackson/crawler/cmd/worker"
 	"github.com/dreamerjackson/crawler/generator"
 	"github.com/dreamerjackson/crawler/log"
 	"github.com/dreamerjackson/crawler/master"
 	proto "github.com/dreamerjackson/crawler/proto/crawler"
-	"github.com/dreamerjackson/crawler/spider"
 	grpccli "github.com/go-micro/plugins/v4/client/grpc"
 	"github.com/go-micro/plugins/v4/config/encoder/toml"
 	"github.com/go-micro/plugins/v4/registry/etcd"
@@ -114,20 +112,12 @@ func Run() {
 
 	reg := etcd.NewRegistry(registry.Addrs(sconfig.RegistryAddress))
 
-	// init tasks
-	var tcfg []spider.TaskConfig
-	if err := cfg.Get("Tasks").Scan(&tcfg); err != nil {
-		logger.Error("init seed tasks", zap.Error(err))
-	}
-	seeds := worker.ParseTaskConfig(logger, nil, nil, tcfg)
-
 	m, err := master.New(
 		masterID,
 		master.WithLogger(logger.Named("master")),
 		master.WithGRPCAddress(GRPCListenAddress),
 		master.WithregistryURL(sconfig.RegistryAddress),
 		master.WithRegistry(reg),
-		master.WithSeeds(seeds),
 	)
 	if err != nil {
 		logger.Error("init  master falied", zap.Error(err))

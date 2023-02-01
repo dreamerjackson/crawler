@@ -1,25 +1,46 @@
-package collect
+package spider
 
 import (
 	"bufio"
+	"context"
 	"fmt"
-	"github.com/dreamerjackson/crawler/spider"
-	"io/ioutil"
-	"net/http"
-	"time"
-
 	"github.com/dreamerjackson/crawler/extensions"
-	"github.com/dreamerjackson/crawler/proxy"
 	"go.uber.org/zap"
 	"golang.org/x/net/html/charset"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/unicode"
 	"golang.org/x/text/transform"
+	"io/ioutil"
+	"math/rand"
+	"net/http"
+	"time"
 )
 
-type BaseFetch struct{}
+type FetchType int
 
-func (BaseFetch) Get(req *spider.Request) ([]byte, error) {
+const (
+	BaseFetchType FetchType = iota
+	BrowserFetchType
+)
+
+type Fetcher interface {
+	Get(url *Request) ([]byte, error)
+}
+
+func NewFetchService(typ FetchType) Fetcher {
+	switch typ {
+	case BaseFetchType:
+		return &baseFetch{}
+	case BrowserFetchType:
+		return &browserFetch{}
+	default:
+		return &browserFetch{}
+	}
+}
+
+type baseFetch struct{}
+
+func (*baseFetch) Get(req *Request) ([]byte, error) {
 	resp, err := http.Get(req.URL)
 
 	if err != nil {
@@ -39,21 +60,25 @@ func (BaseFetch) Get(req *spider.Request) ([]byte, error) {
 	return ioutil.ReadAll(utf8Reader)
 }
 
-type BrowserFetch struct {
-	Timeout time.Duration
-	Proxy   proxy.Func
-	Logger  *zap.Logger
-}
+type browserFetch struct{}
 
 // 模拟浏览器访问
-func (b BrowserFetch) Get(request *spider.Request) ([]byte, error) {
+func (b *browserFetch) Get(request *Request) ([]byte, error) {
+	task := request.Task
+	if err := task.Limit.Wait(context.Background()); err != nil {
+		return nil, err
+	}
+	// 随机休眠，模拟人类行为
+	sleeptime := rand.Int63n(task.WaitTime * 1000)
+	time.Sleep(time.Duration(sleeptime) * time.Millisecond)
+
 	client := &http.Client{
-		Timeout: b.Timeout,
+		Timeout: task.Timeout,
 	}
 
-	if b.Proxy != nil {
+	if task.Proxy != nil {
 		transport := http.DefaultTransport.(*http.Transport)
-		transport.Proxy = b.Proxy
+		transport.Proxy = task.Proxy
 		client.Transport = transport
 	}
 
@@ -63,8 +88,8 @@ func (b BrowserFetch) Get(request *spider.Request) ([]byte, error) {
 		return nil, fmt.Errorf("get url failed:%w", err)
 	}
 
-	if len(request.Task.Cookie) > 0 {
-		req.Header.Set("Cookie", request.Task.Cookie)
+	if len(task.Cookie) > 0 {
+		req.Header.Set("Cookie", task.Cookie)
 	}
 
 	req.Header.Set("User-Agent", extensions.GenerateRandomUA())

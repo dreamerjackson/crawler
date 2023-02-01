@@ -1,6 +1,6 @@
 package spider
 
-type Storage interface {
+type DataRepository interface {
 	Save(datas ...*DataCell) error
 }
 

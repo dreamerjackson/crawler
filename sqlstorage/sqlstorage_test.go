@@ -1,20 +1,19 @@
 package sqlstorage
 
 import (
-	"github.com/dreamerjackson/crawler/engine"
-	"github.com/dreamerjackson/crawler/parse/doubanbook"
-	"github.com/dreamerjackson/crawler/parse/doubangroup"
-	"github.com/dreamerjackson/crawler/parse/doubangroupjs"
 	"github.com/dreamerjackson/crawler/spider"
-	"github.com/dreamerjackson/crawler/sqldb"
+	"github.com/dreamerjackson/crawler/sqlstorage/sqldb"
+	"github.com/dreamerjackson/crawler/tasklib/doubanbook"
+	"github.com/dreamerjackson/crawler/tasklib/doubangroup"
+	"github.com/dreamerjackson/crawler/tasklib/doubangroupjs"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
 func init() {
-	engine.Store.Add(doubangroup.DoubangroupTask)
-	engine.Store.Add(doubanbook.DoubanBookTask)
-	engine.Store.AddJSTask(doubangroupjs.DoubangroupJSTask)
+	spider.TaskStore.Add(doubangroup.DoubangroupTask)
+	spider.TaskStore.Add(doubanbook.DoubanBookTask)
+	spider.TaskStore.AddJSTask(doubangroupjs.DoubangroupJSTask)
 }
 
 type mysqldb struct {

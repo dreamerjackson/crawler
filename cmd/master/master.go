@@ -27,7 +27,7 @@ import (
 	"go-micro.dev/v4/server"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	grpc2 "google.golang.org/grpc"
+	ggrpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"net/http"
 	"strconv"
@@ -200,8 +200,8 @@ func RunHTTPServer(cfg ServerConfig) {
 	defer cancel()
 
 	mux := runtime.NewServeMux()
-	opts := []grpc2.DialOption{
-		grpc2.WithTransportCredentials(insecure.NewCredentials()),
+	opts := []ggrpc.DialOption{
+		ggrpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
 
 	if err := proto.RegisterCrawlerMasterGwFromEndpoint(ctx, mux, GRPCListenAddress, opts); err != nil {

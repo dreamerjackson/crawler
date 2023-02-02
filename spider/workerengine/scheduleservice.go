@@ -1,4 +1,4 @@
-package manager
+package workerengine
 
 import (
 	"github.com/dreamerjackson/crawler/spider"

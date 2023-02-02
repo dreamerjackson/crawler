@@ -1,4 +1,4 @@
-package manager
+package workerengine
 
 import (
 	"github.com/dreamerjackson/crawler/spider"
@@ -10,7 +10,6 @@ type Option func(opts *options)
 type options struct {
 	id                 string
 	WorkCount          int
-	registryURL        string
 	Seeds              []*spider.Task
 	Fetcher            spider.Fetcher
 	Storage            spider.DataRepository
@@ -34,12 +33,6 @@ func WithID(id string) Option {
 func WithStorage(s spider.DataRepository) Option {
 	return func(opts *options) {
 		opts.Storage = s
-	}
-}
-
-func WithregistryURL(registryURL string) Option {
-	return func(opts *options) {
-		opts.registryURL = registryURL
 	}
 }
 

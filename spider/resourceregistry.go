@@ -2,7 +2,6 @@ package spider
 
 import (
 	"context"
-	"github.com/dreamerjackson/crawler/master"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.uber.org/zap"
 )
@@ -12,11 +11,14 @@ type EventType int
 const (
 	EventTypeDelete EventType = iota
 	EventTypePut
+
+	RESOURCEPATH = "/resources"
 )
 
 type WatchResponse struct {
-	typ EventType
-	res *ResourceSpec
+	Typ      EventType
+	Res      *ResourceSpec
+	Canceled bool
 }
 
 type WatchChan chan WatchResponse
@@ -36,7 +38,7 @@ func NewEtcdRegistry(endpoints []string) (ResourceRegistry, error) {
 }
 
 func (e *EtcdRegistry) GetResources() ([]*ResourceSpec, error) {
-	resp, err := e.etcdCli.Get(context.Background(), master.RESOURCEPATH, clientv3.WithPrefix(), clientv3.WithSerializable())
+	resp, err := e.etcdCli.Get(context.Background(), RESOURCEPATH, clientv3.WithPrefix(), clientv3.WithSerializable())
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +55,7 @@ func (e *EtcdRegistry) GetResources() ([]*ResourceSpec, error) {
 func (e *EtcdRegistry) WatchResources() WatchChan {
 	ch := make(WatchChan)
 	go func() {
-		watch := e.etcdCli.Watch(context.Background(), master.RESOURCEPATH, clientv3.WithPrefix(), clientv3.WithPrevKV())
+		watch := e.etcdCli.Watch(context.Background(), RESOURCEPATH, clientv3.WithPrefix(), clientv3.WithPrevKV())
 		for w := range watch {
 			if w.Err() != nil {
 				zap.S().Error("watch resource failed", zap.Error(w.Err()))
@@ -61,7 +63,9 @@ func (e *EtcdRegistry) WatchResources() WatchChan {
 			}
 			if w.Canceled {
 				zap.S().Error("watch resource canceled")
-				return
+				ch <- WatchResponse{
+					Canceled: true,
+				}
 			}
 			for _, ev := range w.Events {
 
@@ -80,6 +84,7 @@ func (e *EtcdRegistry) WatchResources() WatchChan {
 					ch <- WatchResponse{
 						EventTypePut,
 						spec,
+						false,
 					}
 
 				case clientv3.EventTypeDelete:
@@ -91,6 +96,7 @@ func (e *EtcdRegistry) WatchResources() WatchChan {
 					ch <- WatchResponse{
 						EventTypeDelete,
 						spec,
+						false,
 					}
 				}
 			}

@@ -1,9 +1,6 @@
-package manager
+package workerengine
 
 import (
-	"context"
-	"fmt"
-	"github.com/dreamerjackson/crawler/master"
 	"github.com/dreamerjackson/crawler/spider"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.uber.org/zap"
@@ -41,13 +38,6 @@ func NewWorkerService(opts ...Option) (*workerService, error) {
 		task.Storage = e.Storage
 	}
 
-	endpoints := []string{e.registryURL}
-	cli, err := clientv3.New(clientv3.Config{Endpoints: endpoints})
-	if err != nil {
-		return nil, err
-	}
-	e.etcdCli = cli
-
 	return e, nil
 }
 
@@ -65,21 +55,19 @@ func (c *workerService) Run(cluster bool) {
 }
 
 func (c *workerService) LoadResource() error {
-	resp, err := c.etcdCli.Get(context.Background(), master.RESOURCEPATH, clientv3.WithPrefix(), clientv3.WithSerializable())
+	resources := make(map[string]*spider.ResourceSpec)
+	resourceSpecs, err := c.resourceRegistry.GetResources()
 	if err != nil {
-		return fmt.Errorf("etcd get failed")
+		return err
 	}
 
-	resources := make(map[string]*spider.ResourceSpec)
-	for _, kv := range resp.Kvs {
-		r, err := spider.Decode(kv.Value)
-		if err == nil && r != nil {
-			id := getID(r.AssignedNode)
-			if len(id) > 0 && c.id == id {
-				resources[r.Name] = r
-			}
+	for _, r := range resourceSpecs {
+		id := getID(r.AssignedNode)
+		if len(id) > 0 && c.id == id {
+			resources[r.Name] = r
 		}
 	}
+
 	c.Logger.Info("leader init load resource", zap.Int("lenth", len(resources)))
 	c.resourceRepository.Set(resources)
 	for _, r := range resources {
@@ -90,43 +78,25 @@ func (c *workerService) LoadResource() error {
 }
 
 func (c *workerService) WatchResource() {
-	watch := c.etcdCli.Watch(context.Background(), master.RESOURCEPATH, clientv3.WithPrefix(), clientv3.WithPrevKV())
+	watch := c.resourceRegistry.WatchResources()
 	for w := range watch {
-		if w.Err() != nil {
-			c.Logger.Error("watch resource failed", zap.Error(w.Err()))
-			continue
-		}
 		if w.Canceled {
 			c.Logger.Error("watch resource canceled")
 			return
 		}
-		for _, ev := range w.Events {
-
-			switch ev.Type {
-			case clientv3.EventTypePut:
-				spec, err := spider.Decode(ev.Kv.Value)
-				if err != nil {
-					c.Logger.Error("decode etcd value failed", zap.Error(err))
-				}
-				if ev.IsCreate() {
-					c.Logger.Info("receive create resource", zap.Any("spec", spec))
-				} else if ev.IsModify() {
-					c.Logger.Info("receive update resource", zap.Any("spec", spec))
-				}
-
-				c.rlock.Lock()
-				c.runTasks(spec.Name)
-				c.rlock.Unlock()
-			case clientv3.EventTypeDelete:
-				spec, err := spider.Decode(ev.PrevKv.Value)
-				c.Logger.Info("receive delete resource", zap.Any("spec", spec))
-				if err != nil {
-					c.Logger.Error("decode etcd value failed", zap.Error(err))
-				}
-				c.rlock.Lock()
-				c.deleteTasks(spec.Name)
-				c.rlock.Unlock()
+		switch w.Typ {
+		case spider.EventTypePut:
+			c.rlock.Lock()
+			if w.Res != nil {
+				c.runTasks(w.Res.Name)
 			}
+			c.rlock.Unlock()
+		case spider.EventTypeDelete:
+			c.rlock.Lock()
+			if w.Res != nil {
+				c.deleteTasks(w.Res.Name)
+			}
+			c.rlock.Unlock()
 		}
 	}
 }

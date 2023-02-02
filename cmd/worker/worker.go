@@ -9,7 +9,7 @@ import (
 	"github.com/dreamerjackson/crawler/proto/greeter"
 	"github.com/dreamerjackson/crawler/proxy"
 	"github.com/dreamerjackson/crawler/spider"
-	engine "github.com/dreamerjackson/crawler/spider/manager"
+	engine "github.com/dreamerjackson/crawler/spider/workerengine"
 	sqlstorage "github.com/dreamerjackson/crawler/sqlstorage"
 	"github.com/go-micro/plugins/v4/config/encoder/toml"
 	"github.com/go-micro/plugins/v4/registry/etcd"
@@ -77,7 +77,6 @@ var PProfListenAddress string
 var podIP string
 
 func Run() {
-
 	go func() {
 		if err := http.ListenAndServe(PProfListenAddress, nil); err != nil {
 			panic(err)
@@ -161,17 +160,23 @@ func Run() {
 	id := sconfig.Name + "-" + workerID
 	zap.S().Debug("worker id:", id)
 
+	// init etcd registry
+	reg, err := spider.NewEtcdRegistry([]string{sconfig.RegistryAddress})
+	if err != nil {
+		logger.Error("init EtcdRegistry failed", zap.Error(err))
+	}
+
 	s, err := engine.NewWorkerService(
 		engine.WithFetcher(f),
 		engine.WithLogger(logger),
 		engine.WithWorkCount(5),
 		engine.WithSeeds(seeds),
-		engine.WithregistryURL(sconfig.RegistryAddress),
 		engine.WithScheduler(engine.NewSchedule()),
 		engine.WithStorage(storage),
 		engine.WithID(id),
 		engine.WithReqRepository(spider.NewReqHistoryRepository()),
 		engine.WithResourceRepository(spider.NewResourceRepository()),
+		engine.WithResourceRegistry(reg),
 	)
 
 	if err != nil {
@@ -304,10 +309,7 @@ func ParseTaskConfig(logger *zap.Logger, p proxy.Func, f spider.Fetcher, s spide
 			t.Limit = multiLimiter
 		}
 
-		switch cfg.Fetcher {
-		case "browser":
-			t.Fetcher = f
-		}
+		t.Fetcher = f
 		tasks = append(tasks, t)
 	}
 	return tasks

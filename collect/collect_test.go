@@ -51,6 +51,7 @@ func Test_BrowserFetchWithTimeout(t *testing.T) {
 func Test_BrowserFetchWithProxy(t *testing.T) {
 	// url that you host can't access directly
 	url := "https://www.google.com/"
+	// your proxy server address
 	proxyURLs := []string{"http://127.0.0.1:7890"}
 	p, err := proxy.RoundRobinProxySwitcher(proxyURLs...)
 	if err != nil {

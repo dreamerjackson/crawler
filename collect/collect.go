@@ -3,13 +3,13 @@ package collect
 import (
 	"bufio"
 	"fmt"
-	"github.com/dreamerjackson/crawler/spider"
 	"io/ioutil"
 	"net/http"
 	"time"
 
 	"github.com/dreamerjackson/crawler/extensions"
 	"github.com/dreamerjackson/crawler/proxy"
+	"github.com/dreamerjackson/crawler/spider"
 	"go.uber.org/zap"
 	"golang.org/x/net/html/charset"
 	"golang.org/x/text/encoding"
@@ -63,7 +63,7 @@ func (b BrowserFetch) Get(request *spider.Request) ([]byte, error) {
 		return nil, fmt.Errorf("get url failed:%w", err)
 	}
 
-	if len(request.Task.Cookie) > 0 {
+	if request.Task != nil && len(request.Task.Cookie) > 0 {
 		req.Header.Set("Cookie", request.Task.Cookie)
 	}
 

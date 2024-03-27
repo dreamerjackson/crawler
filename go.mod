@@ -3,22 +3,26 @@ module github.com/dreamerjackson/crawler
 go 1.18
 
 require (
+	github.com/PuerkitoBio/goquery v1.9.1
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/go-micro/plugins/v4/client/grpc v1.1.0
 	github.com/go-micro/plugins/v4/config/encoder/toml v1.2.0
 	github.com/go-micro/plugins/v4/registry/etcd v1.2.0
 	github.com/go-micro/plugins/v4/server/grpc v1.2.0
+	github.com/go-micro/plugins/v4/wrapper/breaker/hystrix v1.2.0
+	github.com/go-micro/plugins/v4/wrapper/ratelimiter/ratelimit v1.2.0
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang/protobuf v1.5.2
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.14.0
+	github.com/juju/ratelimit v1.0.2
 	github.com/robertkrimen/otto v0.0.0-20221025135307-511d75fba9f8
 	github.com/spf13/cobra v1.6.1
 	github.com/stretchr/testify v1.8.0
 	go-micro.dev/v4 v4.9.0
 	go.etcd.io/etcd/client/v3 v3.5.2
 	go.uber.org/zap v1.23.0
-	golang.org/x/net v0.2.0
-	golang.org/x/text v0.4.0
+	golang.org/x/net v0.21.0
+	golang.org/x/text v0.14.0
 	golang.org/x/time v0.2.0
 	google.golang.org/genproto v0.0.0-20221114212237-e4508ebdbee1
 	google.golang.org/grpc v1.51.0
@@ -32,6 +36,7 @@ require (
 	github.com/ProtonMail/go-crypto v0.0.0-20210428141323-04723f9f07d7 // indirect
 	github.com/acomagu/bufpipe v1.0.3 // indirect
 	github.com/afex/hystrix-go v0.0.0-20180502004556-fa1af6a1f4f5 // indirect
+	github.com/andybalholm/cascadia v1.3.2 // indirect
 	github.com/bitly/go-simplejson v0.5.0 // indirect
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
@@ -45,8 +50,6 @@ require (
 	github.com/go-git/gcfg v1.5.0 // indirect
 	github.com/go-git/go-billy/v5 v5.3.1 // indirect
 	github.com/go-git/go-git/v5 v5.4.2 // indirect
-	github.com/go-micro/plugins/v4/wrapper/breaker/hystrix v1.2.0 // indirect
-	github.com/go-micro/plugins/v4/wrapper/ratelimiter/ratelimit v1.2.0 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.0.4 // indirect
@@ -56,7 +59,6 @@ require (
 	github.com/imdario/mergo v0.3.12 // indirect
 	github.com/inconshreveable/mousetrap v1.0.1 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
-	github.com/juju/ratelimit v1.0.2 // indirect
 	github.com/kevinburke/ssh_config v0.0.0-20201106050909-4977a11b4351 // indirect
 	github.com/miekg/dns v1.1.43 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
@@ -75,9 +77,9 @@ require (
 	go.etcd.io/etcd/client/pkg/v3 v3.5.2 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
-	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a // indirect
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
-	golang.org/x/sys v0.2.0 // indirect
+	golang.org/x/crypto v0.19.0 // indirect
+	golang.org/x/sync v0.1.0 // indirect
+	golang.org/x/sys v0.17.0 // indirect
 	gopkg.in/sourcemap.v1 v1.0.5 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect

@@ -125,15 +125,23 @@ func Run() {
 	f := spider.NewFetchService(spider.BrowserFetchType)
 
 	// storage
-	sqlURL := cfg.Get("storage", "sqlURL").String("")
-	if storage, err = sqlstorage.New(
-		sqlstorage.WithSQLURL(sqlURL),
-		sqlstorage.WithLogger(logger.Named("sqlDB")),
-		sqlstorage.WithBatchCount(2),
-	); err != nil {
-		logger.Error("create sqlstorage failed", zap.Error(err))
-		panic(err)
-		return
+	storeType := cfg.Get("storage", "type").String("")
+	switch storeType {
+	case "mysql":
+		sqlURL := cfg.Get("storage", "sqlURL").String("")
+		if storage, err = sqlstorage.New(
+			sqlstorage.WithSQLURL(sqlURL),
+			sqlstorage.WithLogger(logger.Named("sqlDB")),
+			sqlstorage.WithBatchCount(2),
+		); err != nil {
+			logger.Error("create sqlstorage failed", zap.Error(err))
+			panic(err)
+			return
+		}
+		logger.Info("start mysql storage")
+	case "empty":
+		storage = &spider.EmptyDataRepository{}
+		logger.Info("start empty storage")
 	}
 
 	// init tasks
@@ -195,6 +203,7 @@ func Run() {
 
 type ServerConfig struct {
 	RegistryAddress  string
+	RegistryType     string
 	RegisterTTL      int
 	RegisterInterval int
 	Name             string
@@ -202,17 +211,26 @@ type ServerConfig struct {
 }
 
 func RunGRPCServer(logger *zap.Logger, cfg ServerConfig) {
-	reg := etcd.NewRegistry(registry.Addrs(cfg.RegistryAddress))
-	service := micro.NewService(
+
+	var options = []micro.Option{
 		micro.Server(grpc.NewServer(
 			server.Id(workerID),
 		)),
 		micro.Address(GRPCListenAddress),
-		micro.Registry(reg),
-		micro.RegisterTTL(time.Duration(cfg.RegisterTTL)*time.Second),
-		micro.RegisterInterval(time.Duration(cfg.RegisterInterval)*time.Second),
+		micro.RegisterTTL(time.Duration(cfg.RegisterTTL) * time.Second),
+		micro.RegisterInterval(time.Duration(cfg.RegisterInterval) * time.Second),
 		micro.WrapHandler(logWrapper(logger)),
 		micro.Name(cfg.Name),
+	}
+
+	switch cfg.RegistryType {
+	case "etcd":
+		reg := etcd.NewRegistry(registry.Addrs(cfg.RegistryAddress))
+		options = append(options, micro.Registry(reg))
+	}
+
+	service := micro.NewService(
+		options...,
 	)
 
 	// 设置micro 客户端默认超时时间为10秒钟

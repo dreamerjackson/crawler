@@ -1,6 +1,7 @@
 package spider
 
 import (
+	"go.uber.org/zap"
 	"regexp"
 	"time"
 )
@@ -8,6 +9,7 @@ import (
 type Context struct {
 	Body []byte
 	Req  *Request
+	Log  *zap.Logger
 }
 
 func (c *Context) Output(data interface{}) *DataCell {

@@ -65,8 +65,10 @@ type browserFetch struct{}
 // 模拟浏览器访问
 func (b *browserFetch) Get(request *Request) ([]byte, error) {
 	task := request.Task
-	if err := task.Limit.Wait(context.Background()); err != nil {
-		return nil, err
+	if task.Limit != nil {
+		if err := task.Limit.Wait(context.Background()); err != nil {
+			return nil, err
+		}
 	}
 	// 随机休眠，模拟人类行为
 	sleeptime := rand.Int63n(task.WaitTime * 1000)

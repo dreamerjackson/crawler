@@ -1,12 +1,14 @@
 package workerengine
 
 import (
+	"fmt"
 	"github.com/dreamerjackson/crawler/spider"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.uber.org/zap"
 	"runtime/debug"
 	"strings"
 	"sync"
+	"time"
 )
 
 type WorkerService interface {
@@ -44,14 +46,35 @@ func NewWorkerService(opts ...Option) (*workerService, error) {
 func (c *workerService) Run(cluster bool) {
 	if !cluster {
 		c.handleSeeds()
+	} else {
+		c.LoadResource()
+		go c.WatchResource()
 	}
-	c.LoadResource()
-	go c.WatchResource()
 	go c.scheduler.Schedule()
 	for i := 0; i < c.WorkCount; i++ {
 		go c.CreateWork()
 	}
+
+	// 创建一个定时器
+	ticker := time.NewTicker(30 * time.Second)
+	done := make(chan bool) // 用于通知主goroutine停止定时器
+
+	go func() {
+		for {
+			select {
+			case <-done: // 接收停止信号
+				fmt.Println("done")
+				return
+			case t := <-ticker.C: // 每次定时器触发
+				fmt.Println("Tick at", t)
+				// 执行定时任务
+				c.handleSeeds()
+			}
+		}
+	}()
+
 	c.HandleResult()
+
 }
 
 func (c *workerService) LoadResource() error {
@@ -223,6 +246,7 @@ func (c *workerService) CreateWork() {
 		ctx := &spider.Context{
 			Body: body,
 			Req:  req,
+			Log:  c.Logger,
 		}
 		result, err := rule.ParseFunc(ctx)
 
@@ -251,8 +275,12 @@ func (c *workerService) HandleResult() {
 				if err := d.Task.Storage.Save(d); err != nil {
 					c.Logger.Error("")
 				}
+			case []*spider.DataCell:
+				if err := d[0].Task.Storage.Save(d...); err != nil {
+					c.Logger.Error("")
+				}
 			}
-			c.Logger.Sugar().Info("get result: ", item)
+			//c.Logger.Sugar().Info("get result: ", item)
 		}
 	}
 }

@@ -96,6 +96,10 @@ func (b *browserFetch) Get(request *Request) ([]byte, error) {
 
 	req.Header.Set("User-Agent", extensions.GenerateRandomUA())
 
+	for k, v := range task.Header {
+		req.Header.Set(k, v)
+	}
+
 	resp, err := client.Do(req)
 
 	if err != nil {
@@ -121,4 +125,10 @@ func DeterminEncoding(r *bufio.Reader) encoding.Encoding {
 	e, _, _ := charset.DetermineEncoding(bytes, "")
 
 	return e
+}
+
+type ChormeDpFetch struct{}
+
+func (*ChormeDpFetch) Get(req *Request) ([]byte, error) {
+	return nil, nil
 }

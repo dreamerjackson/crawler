@@ -2,6 +2,7 @@ package economist
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/dreamerjackson/crawler/limiter"
 	"github.com/dreamerjackson/crawler/spider"
@@ -77,7 +78,7 @@ func ParseTag(ctx *spider.Context) (spider.ParseResult, error) {
 				// Add the article map to items slice
 				items = append(items, data)
 
-				// fmt.Printf("标题: %s\n链接: %s\n摘要: %s\n\n", title, completeLink, summary)
+				fmt.Printf("标题: %s\n链接: %s\n摘要: %s\n\n", title, completeLink, summary)
 			}
 		}
 	})

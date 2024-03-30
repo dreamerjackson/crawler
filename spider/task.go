@@ -59,6 +59,7 @@ type Options struct {
 	Storage  DataRepository
 	Limit    limiter.RateLimiter
 	logger   *zap.Logger
+	Header   map[string]string
 }
 
 var defaultOptions = Options{

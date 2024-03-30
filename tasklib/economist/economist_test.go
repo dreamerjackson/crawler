@@ -42,13 +42,13 @@ func TestParseEconomistList(t *testing.T) {
 		}
 		result, err := rule.ParseFunc(ctx)
 		assert.Nil(t, err)
-		if len(result.Items) > 0 {
-			t.Log("result:", result.Items)
+		for _, item := range result.Items {
+			t.Log("result:", item)
 		}
+
 		if len(result.Requesrts) > 0 {
 			t.Logf("add result %+v", result.Requesrts[0])
 			reqs = append(reqs, result.Requesrts...)
 		}
 	}
-
 }

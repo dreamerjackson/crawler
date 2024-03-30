@@ -8,6 +8,8 @@ import (
 	"github.com/dreamerjackson/crawler/tasklib/economist"
 )
 
+// https://github.com/twitterdev/Twitter-API-v2-sample-code/blob/8c63446fb6ed75b38283fca32e39c21ba08cd896/User-Lookup/get_users_me_user_context.py#L62
+
 func init() {
 	spider.TaskStore.Add(doubangroup.DoubangroupTask)
 	spider.TaskStore.Add(doubanbook.DoubanBookTask)

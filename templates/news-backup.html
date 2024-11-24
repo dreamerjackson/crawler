@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .news-section { margin-bottom: 40px; }
+        h2 { color: #333; }
+        ul { list-style-type: none; padding: 0; }
+        li { margin: 10px 0; }
+        .news-item { margin-bottom: 15px; border-bottom: 1px solid #ccc; padding-bottom: 10px; }
+        .news-field { margin: 5px 0; }
+    </style>
+</head>
+<body>
+<h1>News Dashboard</h1>
+{{ range $source, $items := .NewsData }}
+<div class="news-section">
+    <h2>{{ $source }}</h2>
+    <ul>
+        {{ range $items }}
+        <li class="news-item">
+            {{ range $field, $value := .Fields }}
+            <div class="news-field">
+                <strong>{{ $field }}:</strong> {{ if eq $field "链接" }}<a href="{{ $value }}">{{ $value }}</a>{{ else }}{{ $value }}{{ end }}
+            </div>
+            {{ end }}
+        </li>
+        {{ end }}
+    </ul>
+</div>
+{{ end }}
+</body>
+</html>

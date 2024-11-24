@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Dashboard</title>
+    <link rel="stylesheet" href="../static/style.css">
+</head>
+<body>
+<header>
+    <h1>News Dashboard</h1>
+</header>
+<main>
+    {{ range $source, $items := .NewsData }}
+    <section class="news-source">
+        <h2 class="source-title">{{ $source }}</h2>
+        <div class="cards">
+            {{ range $items }}
+            <div class="card">
+                <h3 class="title">{{ index .Fields "标题" }}</h3>
+                <p class="summary">{{ index .Fields "摘要" }}</p>
+                <a href="{{ index .Fields "链接" }}" class="read-more">Read More</a>
+            </div>
+            {{ end }}
+        </div>
+    </section>
+    {{ end }}
+</main>
+<footer>
+    <p>© 2024 News Dashboard</p>
+</footer>
+</body>
+</html>

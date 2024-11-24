@@ -2,7 +2,6 @@ package bloomberg
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/dreamerjackson/crawler/limiter"
 	"github.com/dreamerjackson/crawler/spider"
@@ -67,11 +66,11 @@ func ParseBloombergHeadline(ctx *spider.Context) (spider.ParseResult, error) {
 	doc.Find(`div[data-component="headline"] > a`).Each(func(i int, s *goquery.Selection) {
 		title := s.Text()
 		link, exists := s.Attr("href")
-		if exists && title != "" {
+		if exists && title != "" && len(title) > 10 {
 			// 确保链接是完整的
-			completeLink := "https://www.bloomberg.com" + strings.TrimSpace(link)
+			completeLink := strings.TrimSpace(link)
 			// 打印标题和链接
-			fmt.Printf("标题: %s\n 链接: %s \n\n", title, completeLink)
+			//fmt.Printf("标题: %s\n 链接: %s \n\n", title, completeLink)
 			// Create a map for each news article
 			article := map[string]interface{}{
 				"标题": title,
@@ -85,8 +84,10 @@ func ParseBloombergHeadline(ctx *spider.Context) (spider.ParseResult, error) {
 		}
 	})
 
-	result := spider.ParseResult{
-		Items: []interface{}{items},
+	result := spider.ParseResult{}
+
+	if len(items) > 0 {
+		result.Items = []interface{}{items}
 	}
 
 	return result, nil

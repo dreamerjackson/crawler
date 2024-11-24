@@ -100,7 +100,7 @@ func ParseNYTimesNews(ctx *spider.Context) (spider.ParseResult, error) {
 			// 将文章添加到items切片中
 			items = append(items, data)
 
-			fmt.Printf("标题: %s\n链接: %s\n摘要: %s\n作者: %s\n\n", title, completeLink, summary, authors)
+			//fmt.Printf("标题: %s\n链接: %s\n摘要: %s\n作者: %s\n\n", title, completeLink, summary, authors)
 		}
 	})
 

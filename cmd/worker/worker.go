@@ -30,6 +30,7 @@ import (
 	"golang.org/x/time/rate"
 	grpc2 "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"html/template"
 	"net/http"
 	"strconv"
 	"time"
@@ -75,6 +76,7 @@ var HTTPListenAddress string
 var GRPCListenAddress string
 var PProfListenAddress string
 var podIP string
+var storage spider.DataRepository
 
 func Run() {
 	go func() {
@@ -84,10 +86,9 @@ func Run() {
 	}()
 
 	var (
-		err     error
-		logger  *zap.Logger
-		p       proxy.Func
-		storage spider.DataRepository
+		err    error
+		logger *zap.Logger
+		p      proxy.Func
 	)
 
 	// load config
@@ -142,6 +143,9 @@ func Run() {
 	case "empty":
 		storage = &spider.EmptyDataRepository{}
 		logger.Info("start empty storage")
+	case "web":
+		storage = &spider.UIRepository{}
+		logger.Info("start UI storage")
 	}
 
 	// init tasks
@@ -197,8 +201,29 @@ func Run() {
 	// start http proxy to GRPC
 	go RunHTTPServer(sconfig)
 
+	// start http proxy to GRPC
+	go RunHTTPAINews()
+
 	// start grpc server
 	RunGRPCServer(logger, sconfig)
+}
+
+var tmpl *template.Template
+
+func RunHTTPAINews() {
+	tmpl = template.Must(template.ParseGlob("templates/*.html"))
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	http.HandleFunc("/", HomeHandler)
+	http.ListenAndServe(":8081", nil)
+}
+
+func HomeHandler(w http.ResponseWriter, r *http.Request) {
+	newsData := storage.GetAllNews()
+	fmt.Printf("Fetched news data: %+v\n", newsData) // 查看数据是否正确
+
+	tmpl.ExecuteTemplate(w, "news.html", map[string]interface{}{
+		"NewsData": newsData,
+	})
 }
 
 type ServerConfig struct {
@@ -328,6 +353,11 @@ func ParseTaskConfig(logger *zap.Logger, p proxy.Func, f spider.Fetcher, s spide
 		}
 
 		t.Fetcher = f
+
+		if cfg.Fetcher == "" {
+			t.Fetcher = nil
+		}
+
 		tasks = append(tasks, t)
 	}
 	return tasks

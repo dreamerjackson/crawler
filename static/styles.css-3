@@ -1,0 +1,91 @@
+body, html {
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f4f4f4;
+    color: #333;
+}
+
+header, footer {
+    text-align: center;
+    padding: 20px 10px;
+    background-color: #024959;
+    color: white;
+}
+
+main {
+    padding: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-around;
+}
+
+.news-source {
+    margin-bottom: 40px;
+    width: 100%;
+}
+
+.source-title {
+    font-size: 1.5em;
+    color: #333;
+    padding: 10px 0;
+}
+
+.cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    justify-content: center;
+}
+
+.card {
+    background-color: white;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    width: calc(33% - 20px);
+    margin-bottom: 20px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.title {
+    margin: 0;
+    font-size: 1.2em;
+    color: #025E73;
+    word-break: break-word;
+}
+
+.title a {
+    text-decoration: none;
+    color: inherit;
+}
+
+.title a:hover {
+    text-decoration: underline;
+}
+
+.summary {
+    font-size: 1em;
+    color: #666;
+    margin-top: 15px;
+}
+
+@media screen and (max-width: 768px) {
+    .card {
+        width: calc(50% - 20px);
+    }
+}
+
+@media screen and (max-width: 480px) {
+    .card {
+        width: 100%;
+    }
+}
+
+footer {
+    font-size: 14px;
+}

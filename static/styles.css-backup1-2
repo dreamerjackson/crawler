@@ -1,0 +1,77 @@
+body, html {
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f4f4f4;
+    color: #333;
+}
+
+header, footer {
+    text-align: center;
+    padding: 20px 10px;
+    background-color: #024959; /* Darker header/footer for better contrast */
+    color: white;
+}
+
+main {
+    padding: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.news-source {
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+.card-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-around;
+}
+
+.news-card {
+    background-color: white;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    margin: 10px;
+    padding: 15px;
+    width: 300px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    position: relative; /* Needed for absolute positioning of the link */
+}
+
+.news-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.news-title {
+    color: #025E73; /* Softer blue */
+    margin: 0;
+    cursor: pointer;
+}
+
+.news-summary {
+    font-size: 14px;
+    color: #666; /* Soft gray for less eye strain */
+    margin-top: 10px;
+}
+
+.read-more {
+    display: none; /* Hidden by default */
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    color: #007BFF;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.news-card:hover .read-more {
+    display: block; /* Only show on hover */
+}
+
+footer {
+    font-size: 14px;
+}

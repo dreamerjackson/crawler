@@ -16,6 +16,11 @@ type SQLStorage struct {
 	options
 }
 
+func (s *SQLStorage) GetAllNews() map[string][]spider.Item {
+	//TODO implement me
+	panic("implement me")
+}
+
 func New(opts ...Option) (*SQLStorage, error) {
 	options := defaultOptions
 	for _, opt := range opts {

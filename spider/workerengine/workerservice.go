@@ -56,7 +56,7 @@ func (c *workerService) Run(cluster bool) {
 	}
 
 	// 创建一个定时器
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(30 * time.Minute)
 	done := make(chan bool) // 用于通知主goroutine停止定时器
 
 	go func() {
@@ -172,6 +172,11 @@ func (c *workerService) handleSeeds() {
 			c.Logger.Error("can not find preset tasks", zap.String("task name", task.Name))
 			continue
 		}
+
+		if task.Fetcher == nil {
+			t.Fetcher = nil
+		}
+
 		task.Rule = t.Rule
 		//task.Logger = c.Logger
 		rootreqs, err := task.Rule.Root()
@@ -186,9 +191,9 @@ func (c *workerService) handleSeeds() {
 		for _, req := range rootreqs {
 			req.Task = task
 		}
-
 		reqs = append(reqs, rootreqs...)
 	}
+
 	go c.scheduler.Push(reqs...)
 }
 
@@ -221,25 +226,30 @@ func (c *workerService) CreateWork() {
 
 		c.reqRepository.AddVisited(req)
 
-		body, err := req.Task.Fetcher.Get(req)
-		if err != nil {
-			c.Logger.Error("can't fetch ",
-				zap.Error(err),
-				zap.String("url", req.URL),
-			)
-			c.SetFailure(req)
+		var body []byte
+		var err error
 
-			continue
-		}
+		fmt.Println("req.Task.Fetcher", req.Task.Fetcher == nil)
+		if req.Task.Fetcher != nil {
+			body, err = req.Task.Fetcher.Get(req)
+			if err != nil {
+				c.Logger.Error("can't fetch ",
+					zap.Error(err),
+					zap.String("url", req.URL),
+				)
+				c.SetFailure(req)
 
-		if len(body) < 6000 {
-			c.Logger.Error("can't fetch ",
-				zap.Int("length", len(body)),
-				zap.String("url", req.URL),
-			)
-			c.SetFailure(req)
+				continue
+			}
 
-			continue
+			if len(body) < 6000 {
+				c.Logger.Error("can't fetch ",
+					zap.Int("length", len(body)),
+					zap.String("url", req.URL),
+				)
+				c.SetFailure(req)
+				continue
+			}
 		}
 
 		rule := req.Task.Rule.Trunk[req.RuleName]

@@ -3,6 +3,7 @@ package sqlstorage
 import (
 	"encoding/json"
 	"errors"
+
 	"github.com/dreamerjackson/crawler/spider"
 
 	"github.com/dreamerjackson/crawler/engine"

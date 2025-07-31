@@ -3,6 +3,10 @@ package worker
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"strconv"
+	"time"
+
 	"github.com/dreamerjackson/crawler/collect"
 	"github.com/dreamerjackson/crawler/engine"
 	"github.com/dreamerjackson/crawler/generator"
@@ -31,9 +35,6 @@ import (
 	"golang.org/x/time/rate"
 	grpc2 "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"net/http"
-	"strconv"
-	"time"
 )
 
 var ServiceName string = "go.micro.server.worker"

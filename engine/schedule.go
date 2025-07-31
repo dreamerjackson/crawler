@@ -3,18 +3,22 @@ package engine
 import (
 	"context"
 	"fmt"
-	"github.com/dreamerjackson/crawler/master"
-	"github.com/dreamerjackson/crawler/spider"
-	clientv3 "go.etcd.io/etcd/client/v3"
 	"runtime/debug"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/dreamerjackson/crawler/master"
+	"github.com/dreamerjackson/crawler/spider"
+	clientv3 "go.etcd.io/etcd/client/v3"
+
+	"github.com/dreamerjackson/crawler/limiter"
 	"github.com/dreamerjackson/crawler/parse/doubanbook"
 	"github.com/dreamerjackson/crawler/parse/doubangroup"
 	"github.com/dreamerjackson/crawler/parse/doubangroupjs"
 	"github.com/robertkrimen/otto"
 	"go.uber.org/zap"
+	"golang.org/x/time/rate"
 )
 
 func init() {
@@ -72,6 +76,17 @@ func AddJsReq(jreq map[string]interface{}) []*spider.Request {
 func (c *CrawlerStore) AddJSTask(m *spider.TaskModle) {
 	task := &spider.Task{
 		//Property: m.Property,
+		Options: spider.Options{
+			Name: m.Name,
+			Limit: limiter.Multi(
+				rate.NewLimiter(limiter.Per(1, 3*time.Second), 1),
+				rate.NewLimiter(limiter.Per(20, 60*time.Second), 20),
+			),
+			Cookie:   m.Cookie,
+			Reload:   true,
+			WaitTime: m.WaitTime,
+			MaxDepth: m.MaxDepth,
+		},
 	}
 
 	task.Rule.Root = func() ([]*spider.Request, error) {
@@ -365,6 +380,7 @@ func (c *Crawler) CreateWork() {
 			c.Logger.Error("can't fetch ",
 				zap.Int("length", len(body)),
 				zap.String("url", req.URL),
+				zap.String("body", string(body)),
 			)
 			c.SetFailure(req)
 

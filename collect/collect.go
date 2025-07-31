@@ -3,10 +3,11 @@ package collect
 import (
 	"bufio"
 	"fmt"
-	"github.com/dreamerjackson/crawler/spider"
 	"io/ioutil"
 	"net/http"
 	"time"
+
+	"github.com/dreamerjackson/crawler/spider"
 
 	"github.com/dreamerjackson/crawler/extensions"
 	"github.com/dreamerjackson/crawler/proxy"

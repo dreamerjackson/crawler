@@ -3,11 +3,12 @@ package auth
 import (
 	"context"
 	"errors"
+	"strings"
+
 	"go-micro.dev/v4"
 	"go-micro.dev/v4/auth"
 	"go-micro.dev/v4/metadata"
 	"go-micro.dev/v4/server"
-	"strings"
 )
 
 func NewAuthWrapper(service micro.Service) server.HandlerWrapper {

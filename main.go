@@ -1,8 +1,9 @@
 package main
 
 import (
-	"github.com/dreamerjackson/crawler/cmd"
 	_ "net/http/pprof"
+
+	"github.com/dreamerjackson/crawler/cmd"
 )
 
 func main() {

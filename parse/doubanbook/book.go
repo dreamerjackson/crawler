@@ -1,12 +1,13 @@
 package doubanbook
 
 import (
-	"github.com/dreamerjackson/crawler/limiter"
-	"github.com/dreamerjackson/crawler/spider"
-	"golang.org/x/time/rate"
 	"regexp"
 	"strconv"
 	"time"
+
+	"github.com/dreamerjackson/crawler/limiter"
+	"github.com/dreamerjackson/crawler/spider"
+	"golang.org/x/time/rate"
 
 	"go.uber.org/zap"
 )

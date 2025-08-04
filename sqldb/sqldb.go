@@ -81,7 +81,7 @@ func (d *Sqldb) CreateTable(t TableData) error {
 		sql += t.Title + ` ` + t.Type + `,`
 	}
 
-	sql = sql[:len(sql)-1] + `) ENGINE=MyISAM DEFAULT CHARSET=utf8;`
+	sql = sql[:len(sql)-1] + `) ENGINE=InnoDB DEFAULT CHARSET=utf8;`
 
 	d.logger.Debug("crate table", zap.String("sql", sql))
 

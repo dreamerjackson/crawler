@@ -531,10 +531,10 @@ func (c *Crawler) loadResource() error {
 	c.Logger.Info("leader init load resource", zap.Int("lenth", len(resources)))
 	c.rlock.Lock()
 	defer c.rlock.Unlock()
-	c.resources = resources
 	for _, r := range resources {
 		c.runTasks(r.Name)
 	}
+	c.resources = resources
 
 	return nil
 }

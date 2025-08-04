@@ -86,7 +86,7 @@ func (r *Request) Fetch() ([]byte, error) {
 		return nil, err
 	}
 	// 随机休眠，模拟人类行为
-	sleeptime := rand.Int63n(r.Task.WaitTime * 1000)
+	sleeptime := rand.Int63n(r.Task.WaitTime * 5000)
 	time.Sleep(time.Duration(sleeptime) * time.Millisecond)
 
 	return r.Task.Fetcher.Get(r)

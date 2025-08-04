@@ -1,5 +1,5 @@
-FROM golang:1.18-alpine as builder
-LABEL maintainer="zhuimengshaonian04@gmail.com"
+FROM golang:1.24.5-alpine as builder
+LABEL maintainer="bruceyk888@gmail.com"
 WORKDIR /app
 COPY . /app
 RUN go mod download

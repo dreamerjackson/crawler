@@ -5,6 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"reflect"
+	"sort"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/bwmarrin/snowflake"
 	proto "github.com/dreamerjackson/crawler/proto/crawler"
 	"github.com/golang/protobuf/ptypes/empty"
@@ -13,13 +21,6 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"go.uber.org/zap"
-	"net"
-	"reflect"
-	"sort"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 const (
@@ -205,7 +206,10 @@ func (m *Master) Campaign() {
 			if err := m.loadResource(); err != nil {
 				m.logger.Error("loadResource failed:%w", zap.Error(err))
 			}
-			m.reAssign()
+			// add by kyu
+			if m.IsLeader() {
+				m.reAssign()
+			}
 		case <-time.After(20 * time.Second):
 			rsp, err := e.Leader(context.Background())
 			if err != nil {
@@ -442,11 +446,12 @@ func (m *Master) reAssign() {
 		id, err := getNodeID(r.AssignedNode)
 
 		if err != nil {
-			m.logger.Error("get nodeid failed", zap.Error(err))
+			m.logger.Error("get node id failed", zap.Error(err))
 		}
 
 		if _, ok := m.workNodes[id]; !ok {
 			rs = append(rs, r)
+			continue
 		}
 	}
 

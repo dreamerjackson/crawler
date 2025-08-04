@@ -1,6 +1,8 @@
 package sqlstorage
 
 import (
+	"testing"
+
 	"github.com/dreamerjackson/crawler/engine"
 	"github.com/dreamerjackson/crawler/parse/doubanbook"
 	"github.com/dreamerjackson/crawler/parse/doubangroup"
@@ -8,7 +10,6 @@ import (
 	"github.com/dreamerjackson/crawler/spider"
 	"github.com/dreamerjackson/crawler/sqldb"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func init() {

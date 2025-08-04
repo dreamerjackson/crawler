@@ -3,6 +3,10 @@ package master
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"strconv"
+	"time"
+
 	"github.com/dreamerjackson/crawler/cmd/worker"
 	"github.com/dreamerjackson/crawler/generator"
 	"github.com/dreamerjackson/crawler/log"
@@ -31,9 +35,6 @@ import (
 	"go.uber.org/zap/zapcore"
 	grpc2 "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"net/http"
-	"strconv"
-	"time"
 )
 
 var MasterCmd = &cobra.Command{

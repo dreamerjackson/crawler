@@ -3,9 +3,10 @@ package sqldb
 import (
 	"database/sql"
 	"errors"
+	"strings"
+
 	_ "github.com/go-sql-driver/mysql"
 	"go.uber.org/zap"
-	"strings"
 )
 
 type DBer interface {
@@ -80,7 +81,7 @@ func (d *Sqldb) CreateTable(t TableData) error {
 		sql += t.Title + ` ` + t.Type + `,`
 	}
 
-	sql = sql[:len(sql)-1] + `) ENGINE=MyISAM DEFAULT CHARSET=utf8;`
+	sql = sql[:len(sql)-1] + `) ENGINE=InnoDB DEFAULT CHARSET=utf8;`
 
 	d.logger.Debug("crate table", zap.String("sql", sql))
 

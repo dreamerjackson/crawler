@@ -32,6 +32,7 @@ services:
         condition: service_healthy
   mysql:
     image: mysql:5.7
+    platform: linux/amd64
     #    restart: always
     environment:
       MYSQL_DATABASE: 'crawler'
@@ -52,7 +53,7 @@ services:
     networks:
       counter-net:
     healthcheck:
-      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      test: ["CMD", "mysqladmin", "-u", "myuser", "--password=mypassword", "ping", "-h", "localhost"]
       interval: 5s
       timeout: 5s
       retries: 55

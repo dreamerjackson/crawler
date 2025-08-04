@@ -1,12 +1,13 @@
 package proxy
 
 import (
-	"github.com/stretchr/testify/assert"
 	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func FuzzGetProxy(f *testing.F) {
